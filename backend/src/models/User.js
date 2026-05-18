@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const UserSchema = new mongoose.Schema(
   {
     username: { type: String, required: true, trim: true },
+    phone: { type: String, unique: true, sparse: true },
     role: {
       type: String,
       enum: ["USER", "MOD", "ADMIN"],
