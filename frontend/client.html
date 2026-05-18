@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>SafeChat Demo</title>
+</head>
+<body>
+  <h2>SafeChat Demo</h2>
+
+  <label>User ID :</label>
+  <input id="userId" placeholder="Paste user ObjectId here" />
+  <br><br>
+
+  <label>Conversation ID :</label>
+  <input id="conversationId" placeholder="Paste conversation ObjectId here" />
+  <button id="connectBtn">Connect + Join</button>
+
+  <br><br>
+
+  <input id="message" placeholder="Type a message..." />
+  <button id="sendBtn">Send</button>
+
+  <ul id="messages"></ul>
+
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script>
+    let socket = null;
+
+    const userIdInput = document.getElementById("userId");
+    const conversationIdInput = document.getElementById("conversationId");
+    const messageInput = document.getElementById("message");
+    const messagesList = document.getElementById("messages");
+    const connectBtn = document.getElementById("connectBtn");
+
+    function addMessage(text) {
+      const li = document.createElement("li");
+      li.textContent = text;
+      messagesList.appendChild(li);
+    }
+
+    connectBtn.onclick = () => {
+      const userId = userIdInput.value.trim();
+      const conversationId = conversationIdInput.value.trim();
+
+      if (!userId || !conversationId) {
+        alert("Please enter userId and conversationId");
+        return;
+      }
+
+      // Déconnecter l'ancien socket s'il existe déjà
+      if (socket) {
+        socket.disconnect();
+      }
+
+      socket = io("http://localhost:3001", {
+        query: { userId }
+      });
+
+      socket.on("connect", () => {
+        console.log("Connected:", socket.id);
+        socket.emit("conversation:join", { conversationId });
+      });
+
+      socket.on("conversation:joined", (data) => {
+        console.log("Joined conversation:", data.conversationId);
+      });
+
+      socket.on("conversation:error", (err) => {
+        console.error("Join error:", err);
+        alert("Join error: " + JSON.stringify(err));
+      });
+
+      socket.on("message:new", (msg) => {
+        addMessage(`${msg.senderId}: ${msg.content}`);
+      });
+
+      socket.on("message:ack", (ack) => {
+        console.log("Message ACK:", ack);
+      });
+
+      socket.on("message:error", (err) => {
+        console.error("Message error:", err);
+        alert("Message error: " + JSON.stringify(err));
+      });
+
+      connectBtn.disabled = true;
+      connectBtn.textContent = "Connected";
+    };
+
+    document.getElementById("sendBtn").onclick = () => {
+      if (!socket) {
+        alert("Please connect first");
+        return;
+      }
+
+      const conversationId = conversationIdInput.value.trim();
+      const content = messageInput.value.trim();
+
+      if (!content) return;
+
+      socket.emit("message:send", {
+        conversationId,
+        content,
+        clientMessageId: Date.now().toString()
+      });
+
+      messageInput.value = "";
+    };
+  </script>
+</body>
+</html>
