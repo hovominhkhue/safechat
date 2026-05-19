@@ -177,4 +177,55 @@ async function createGroup(req, res) {
   }
 }
 
-module.exports = { listMine, createOrGetDm, createGroup };
+async function getById(req, res) {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ error: "INVALID_ID" });
+    }
+
+    const conv = await Conversation.findById(id).lean();
+    if (!conv) {
+      return res.status(404).json({ error: "NOT_FOUND" });
+    }
+
+    const members = await ConversationMember.find({ conversationId: conv._id })
+      .populate("userId", "username")
+      .lean();
+
+    const myMembership = members.find(
+      (m) => m.userId && m.userId._id.toString() === String(req.user.userId)
+    );
+
+    if (!myMembership) {
+      return res.status(403).json({ error: "NOT_A_MEMBER" });
+    }
+
+    return res.status(200).json({
+      conversation: {
+        id: conv._id.toString(),
+        type: conv.type,
+        name: conv.title || null,
+        channelTopic: conv.channelTopic || null,
+        dmKey: conv.dmKey || null,
+        createdBy: conv.createdBy.toString(),
+        lastMessageAt: conv.lastMessageAt || null,
+        lastMessagePreview: conv.lastMessagePreview || null,
+        messageCount: conv.messageCount,
+        createdAt: conv.createdAt,
+        myRole: myMembership.role,
+        members: members.map((m) => ({
+          id: m.userId._id.toString(),
+          username: m.userId.username,
+          role: m.role,
+        })),
+      },
+    });
+  } catch (e) {
+    console.error("GET_CONVERSATION_FAILED:", e);
+    return res.status(500).json({ error: "GET_CONVERSATION_FAILED", message: e.message });
+  }
+}
+
+module.exports = { listMine, createOrGetDm, createGroup, getById };
