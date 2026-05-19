@@ -1,3 +1,4 @@
+const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 
 async function requestOtp(req, res) {
@@ -28,4 +29,43 @@ async function requestOtp(req, res) {
   }
 }
 
-module.exports = { requestOtp };
+async function verifyOtp(req, res) {
+  try {
+    const { phone, otp } = req.body;
+
+    if (!phone || !otp) {
+      return res.status(400).json({ error: "BAD_REQUEST", message: "phone et otp sont requis" });
+    }
+
+    const user = await User.findOne({ phone: phone.trim() });
+
+    if (!user) {
+      return res.status(404).json({ error: "USER_NOT_FOUND" });
+    }
+
+    if (otp !== process.env.OTP_FAKE_CODE) {
+      return res.status(401).json({ error: "INVALID_OTP" });
+    }
+
+    const token = jwt.sign(
+      { userId: user._id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN }
+    );
+
+    return res.status(200).json({
+      token,
+      user: {
+        id: user._id,
+        phone: user.phone,
+        username: user.username,
+        role: user.role,
+      },
+    });
+  } catch (e) {
+    console.error("VERIFY_OTP_FAILED:", e);
+    return res.status(500).json({ error: "VERIFY_OTP_FAILED", message: e.message });
+  }
+}
+
+module.exports = { requestOtp, verifyOtp };
