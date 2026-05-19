@@ -19,6 +19,7 @@ app.use(cors());
 app.use(express.json());
 
 app.use("/auth", require("./routes/auth"));
+app.use("/conversations", require("./routes/conversations"));
 
 /** Health */
 app.get("/health", (req, res) => res.json({ ok: true }));
