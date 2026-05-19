@@ -23,6 +23,12 @@ app.use("/auth", require("./routes/auth"));
 /** Health */
 app.get("/health", (req, res) => res.json({ ok: true }));
 
+/** DEV ONLY — supprimée à la 3.5 */
+app.get("/test-protected",
+  require("./middleware/auth"),
+  (req, res) => res.json({ user: req.user })
+);
+
 /**
  * DEV ONLY — Create user manually
  * POST /dev/users
