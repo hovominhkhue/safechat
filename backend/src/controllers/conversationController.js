@@ -106,4 +106,75 @@ async function createOrGetDm(req, res) {
   }
 }
 
-module.exports = { listMine, createOrGetDm };
+async function createGroup(req, res) {
+  try {
+    const { name, memberIds } = req.body;
+
+    if (!name || typeof name !== "string" || !name.trim()) {
+      return res.status(400).json({ error: "BAD_REQUEST", message: "name est requis et doit être une string non vide" });
+    }
+
+    if (!Array.isArray(memberIds)) {
+      return res.status(400).json({ error: "BAD_REQUEST", message: "memberIds doit être un tableau" });
+    }
+
+    for (const id of memberIds) {
+      if (!mongoose.isValidObjectId(id)) {
+        return res.status(400).json({ error: "INVALID_MEMBER_ID", message: `${id} n'est pas un ObjectId valide` });
+      }
+    }
+
+    const creatorId = new mongoose.Types.ObjectId(req.user.userId);
+
+    // Dédupliquer : retirer le créateur s'il est dans memberIds
+    const uniqueMemberIds = [...new Set(memberIds.map(String))]
+      .filter((id) => id !== String(creatorId))
+      .map((id) => new mongoose.Types.ObjectId(id));
+
+    if (uniqueMemberIds.length > 0) {
+      const found = await User.find({ _id: { $in: uniqueMemberIds } }).lean();
+      if (found.length !== uniqueMemberIds.length) {
+        return res.status(404).json({ error: "USER_NOT_FOUND" });
+      }
+    }
+
+    const channelId = `group_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+    const conv = await Conversation.create({
+      type: "GROUP",
+      channelId,
+      title: name.trim(),
+      createdBy: creatorId,
+    });
+
+    const memberDocs = [
+      { conversationId: conv._id, userId: creatorId, role: "OWNER" },
+      ...uniqueMemberIds.map((uid) => ({ conversationId: conv._id, userId: uid, role: "MEMBER" })),
+    ];
+
+    try {
+      await ConversationMember.insertMany(memberDocs);
+    } catch (insertErr) {
+      // Cleanup best-effort pour éviter une conversation orpheline
+      await Conversation.deleteOne({ _id: conv._id }).catch(() => {});
+      throw insertErr;
+    }
+
+    const membersCount = memberDocs.length;
+
+    return res.status(201).json({
+      conversation: {
+        id: conv._id.toString(),
+        type: conv.type,
+        name: conv.title,
+        membersCount,
+        myRole: "OWNER",
+      },
+    });
+  } catch (e) {
+    console.error("CREATE_GROUP_FAILED:", e);
+    return res.status(500).json({ error: "CREATE_GROUP_FAILED", message: e.message });
+  }
+}
+
+module.exports = { listMine, createOrGetDm, createGroup };
