@@ -68,4 +68,26 @@ async function verifyOtp(req, res) {
   }
 }
 
-module.exports = { requestOtp, verifyOtp };
+async function me(req, res) {
+  try {
+    const user = await User.findById(req.user.userId).lean();
+
+    if (!user) {
+      return res.status(404).json({ error: "USER_NOT_FOUND" });
+    }
+
+    return res.status(200).json({
+      user: {
+        id: user._id,
+        phone: user.phone,
+        username: user.username,
+        role: user.role,
+      },
+    });
+  } catch (e) {
+    console.error("ME_FAILED:", e);
+    return res.status(500).json({ error: "ME_FAILED", message: e.message });
+  }
+}
+
+module.exports = { requestOtp, verifyOtp, me };
