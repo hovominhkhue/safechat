@@ -228,4 +228,125 @@ async function getById(req, res) {
   }
 }
 
-module.exports = { listMine, createOrGetDm, createGroup, getById };
+async function addMember(req, res) {
+  try {
+    const { id } = req.params;
+    const { userId } = req.body;
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ error: "INVALID_ID" });
+    }
+    if (!userId || !mongoose.isValidObjectId(userId)) {
+      return res.status(400).json({ error: "INVALID_USER_ID" });
+    }
+
+    const conv = await Conversation.findById(id).lean();
+    if (!conv) {
+      return res.status(404).json({ error: "NOT_FOUND" });
+    }
+
+    const myMembership = await ConversationMember.findOne({
+      conversationId: conv._id,
+      userId: new mongoose.Types.ObjectId(req.user.userId),
+    }).lean();
+
+    if (!myMembership) {
+      return res.status(403).json({ error: "NOT_A_MEMBER" });
+    }
+    if (myMembership.role !== "OWNER") {
+      return res.status(403).json({ error: "NOT_OWNER" });
+    }
+
+    if (conv.type !== "GROUP") {
+      return res.status(400).json({ error: "NOT_A_GROUP" });
+    }
+
+    const targetId = new mongoose.Types.ObjectId(userId);
+
+    const targetUser = await User.findById(targetId).lean();
+    if (!targetUser) {
+      return res.status(404).json({ error: "USER_NOT_FOUND" });
+    }
+
+    const existing = await ConversationMember.findOne({
+      conversationId: conv._id,
+      userId: targetId,
+    }).lean();
+    if (existing) {
+      return res.status(409).json({ error: "ALREADY_MEMBER" });
+    }
+
+    const member = await ConversationMember.create({
+      conversationId: conv._id,
+      userId: targetId,
+      role: "MEMBER",
+    });
+
+    return res.status(201).json({
+      ok: true,
+      member: {
+        id: member._id.toString(),
+        userId: targetUser._id.toString(),
+        username: targetUser.username,
+        role: member.role,
+      },
+    });
+  } catch (e) {
+    console.error("ADD_MEMBER_FAILED:", e);
+    return res.status(500).json({ error: "ADD_MEMBER_FAILED", message: e.message });
+  }
+}
+
+async function removeMember(req, res) {
+  try {
+    const { id, userId } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ error: "INVALID_ID" });
+    }
+    if (!mongoose.isValidObjectId(userId)) {
+      return res.status(400).json({ error: "INVALID_USER_ID" });
+    }
+
+    const conv = await Conversation.findById(id).lean();
+    if (!conv) {
+      return res.status(404).json({ error: "NOT_FOUND" });
+    }
+
+    const myMembership = await ConversationMember.findOne({
+      conversationId: conv._id,
+      userId: new mongoose.Types.ObjectId(req.user.userId),
+    }).lean();
+
+    if (!myMembership || myMembership.role !== "OWNER") {
+      return res.status(403).json({ error: "NOT_OWNER" });
+    }
+
+    if (conv.type !== "GROUP") {
+      return res.status(400).json({ error: "NOT_A_GROUP" });
+    }
+
+    const targetId = new mongoose.Types.ObjectId(userId);
+
+    const targetMembership = await ConversationMember.findOne({
+      conversationId: conv._id,
+      userId: targetId,
+    }).lean();
+
+    if (!targetMembership) {
+      return res.status(404).json({ error: "MEMBER_NOT_FOUND" });
+    }
+    if (targetMembership.role === "OWNER") {
+      return res.status(400).json({ error: "CANNOT_REMOVE_OWNER" });
+    }
+
+    await ConversationMember.deleteOne({ _id: targetMembership._id });
+
+    return res.status(200).json({ ok: true });
+  } catch (e) {
+    console.error("REMOVE_MEMBER_FAILED:", e);
+    return res.status(500).json({ error: "REMOVE_MEMBER_FAILED", message: e.message });
+  }
+}
+
+module.exports = { listMine, createOrGetDm, createGroup, getById, addMember, removeMember };
