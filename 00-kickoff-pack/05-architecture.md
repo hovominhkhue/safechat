@@ -12,10 +12,12 @@
                            │
        ┌───────────────────┴───────────────────┐
        │            FRONTEND                    │
-       │   client.html (MVP) → SPA plus tard    │
+       │   Frontend MVP en vanilla JS + Tailwind CDN, servi │
+       │   directement par le backend Express.  │
+       │   Pas de build step, démarrage zéro config. │
        │   • Affiche channels et messages       │
        │   • Connecte au WebSocket              │
-       │   • Stocke le JWT en mémoire/localStorage │
+       │   • Stocke le JWT en localStorage     │
        └───────────────────┬───────────────────┘
                            │
               ┌────────────┴────────────┐
@@ -49,6 +51,9 @@
        │   │  • User, Channel,            │     │
        │   │    Conversation, Message,    │     │
        │   │    Report, ConversationMember│     │
+       │   ├──────────────────────────────┤     │
+       │   │  + express.static(./frontend)│     │
+       │   │    → sert le frontend SPA    │     │
        │   └──────────────────────────────┘     │
        └────────────────────┬───────────────────┘
                             │
@@ -93,12 +98,13 @@
 
 | Capacité | Responsable | Pas le rôle de |
 |---|---|---|
-| Validation des entrées (body, params) | Express endpoint + Mongoose schema | Le front (contournable) |
+| Validation des entrées (body, params) ✅ RÉALISÉ | Express endpoint + Mongoose schema | Le front (contournable) |
 | Règles métier (RBAC, appartenance) | Controllers / middlewares | Triggers DB (Mongo n'en a pas vraiment) |
 | Intégrité référentielle (refs ObjectId) | Mongoose validation + indexes uniques | Code applicatif seul |
-| Permissions RBAC | Middleware `auth.js` (lit JWT, attache `req.user`) | Front (affichage seulement) |
+| Permissions RBAC via JWT ✅ RÉALISÉ | Middleware `auth.js` + `requireRole.js` (lit JWT, attache `req.user`) | Front (affichage seulement) |
 | Authentification | Route `/auth/*` + middleware JWT | URL guessing côté front |
-| Diffusion temps réel | Socket.IO rooms (`conversation:<id>`) | HTTP polling |
+| Diffusion temps réel via Socket.IO rooms ✅ RÉALISÉ | Socket.IO rooms (`conversation:<id>`) | HTTP polling |
+| Authentification socket via JWT (auth.token) ✅ RÉALISÉ | Middleware socket `jwtAuthMiddleware` (socket.handshake.auth.token) | query string userId |
 | Stockage des messages | MongoDB (collection messages) | Mémoire serveur (perdrait au restart) |
 | Envoi OTP réel (SMS) | ⚠️ Hors scope MVP — simulé | — |
 

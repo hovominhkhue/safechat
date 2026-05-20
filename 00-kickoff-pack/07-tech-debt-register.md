@@ -18,7 +18,15 @@ futur, et quand on prévoit de la rembourser.
 | D-09 | **MongoDB instance unique** (pas de réplica) | Suffisant pour MVP, demande de l'infra | 1 j (replica set, ou Mongo Atlas) | À la mise en prod |
 | D-10 | **Pas de RGPD complet** (droit à l'effacement, mentions légales) | Hors scope MVP école | 2-3 j (route /me DELETE + soft anonymization) | Obligatoire avant ouverture publique en UE |
 | D-11 | **Pas de modération côté contenu** (filtre mots / IA) | Hors scope MVP, focus signalement manuel | 2-4 j (intégration API modération) | V2 |
-| D-12 | **Auth socket = JWT en query string** | Simple à implémenter | 0,5 j (passer en auth handshake) | V1.1 |
+| D-12 | ~~Auth socket via JWT en query string~~ | ✅ RÉSOLU Étape 6.2 — auth via socket.handshake.auth.token | — | — |
+| D-13 | **Pas de tests automatisés sur le frontend** | SPA vanilla sans framework, pas de runner configuré | 2-3 j (Playwright ou Cypress pour les flows critiques) | V1.1 |
+| D-14 | **Tailwind via CDN** (marqué "not for production") | Aucun build step souhaité au MVP | 1 j (PostCSS + purge CSS, passer à un vrai build) | Avant ouverture publique |
+| D-15 | **Pas de pagination côté frontend** (scroll infini manuel) | Implémentation rapide avec `before` cursor | 1-2 j (virtualisation liste, skeleton loaders) | V1.1 si > 500 messages |
+| D-16 | **localStorage pour le JWT** | Simple, fonctionne sans back-end session | 1 j (httpOnly cookie via endpoint `/auth/session`) | Avant prod (XSS via localStorage) |
+| D-17 | **Pas de reconnexion Socket.IO automatique gérée côté UI** | Socket.IO gère la reconnexion bas niveau, l'UI ne resync pas | 1 j (event `reconnect` → recharger historique depuis `lastMessageAt`) | V1.1 |
+| D-18 | **Format sender non normalisé entre socket et API** | Contournement inline dans `onMessageNew` | 0,5 j (middleware socket qui enrichit `message:new` avec `sender.username`) | V1.1 |
+| D-19 | **Pas d'endpoint de recherche de users** pour initier un DM | Le DM demande à connaître l'ID cible | 1-2 j (GET /users?search=username) | V1.1 |
+| D-20 | **Report dupliqué accepté** (même user, même message) | E11000 géré en 409 mais aucune validation business préalable | 0,5 j (vérification avant insert) | V1.1 |
 
 ## Risques techniques identifiés (top 5)
 

@@ -133,6 +133,9 @@
 | messageId    | ObjectId | ref Message, required    | Message signalé |
 | reportedBy   | ObjectId | ref User, required       | Auteur du signalement |
 | reason       | String   | required                 | Motif libre |
+| status       | String   | enum, default OPEN       | OPEN \| REVIEWED \| RESOLVED \| REJECTED |
+| handledBy    | ObjectId | ref User, optional       | Qui a traité le report |
+| handledAt    | Date     | optional                 | Date du traitement |
 | timestamps   | Date     | auto                     | Timestamps |
 
 ## 4. Index prévus
@@ -146,6 +149,8 @@
 - `messages.conversationId` — pour le fetch historique d'une conv
 - `messages.createdAt` — pour le tri chronologique
 - `reports.messageId` — pour retrouver tous les reports d'un message
+- `reports.(messageId, reportedBy)` — compound unique (anti-doublon
+  de signalement par le même user sur le même message)
 
 ## 5. Anti-patterns évités (justification)
 

@@ -67,6 +67,10 @@ Transitions autorisées :
 
 Pas de retour BLOCKED → SENT en MVP (dette acceptée, voir doc 07).
 
+> Note livraison MVP : en MVP, seule la transition OPEN → RESOLVED
+> est implémentée (déclenchée par PATCH /messages/:id/block). Les
+> états REVIEWED et REJECTED restent prévus pour V1.1.
+
 ### Entité : Conversation
 Pas une vraie machine à états — uniquement un attribut `type` figé à
 la création : `DM` | `GROUP` | `CHANNEL`. Une conversation ne change
