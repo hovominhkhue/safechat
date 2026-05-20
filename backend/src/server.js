@@ -4,12 +4,14 @@ const express = require("express");
 const cors = require("cors");
 const { Server } = require("socket.io");
 
+const path = require("path");
 const connectDB = require("./config/db");
 const setupSockets = require("./sockets");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(express.static(path.join(__dirname, "../../frontend")));
 
 app.use("/auth", require("./routes/auth"));
 app.use("/conversations", require("./routes/conversations"));

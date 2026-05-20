@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SafeChat</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+  <!-- Écran de login -->
+  <section id="login-section" class="flex items-center justify-center min-h-screen">
+    <div class="bg-white rounded-lg shadow-md p-8 w-96">
+      <h1 class="text-2xl font-bold mb-6 text-center">SafeChat</h1>
+      <form id="phone-form">
+        <label class="block mb-2">Numéro de téléphone</label>
+        <input id="phone-input" type="tel" class="border w-full p-2 rounded mb-4"
+               placeholder="0612345678" required>
+        <button type="submit" class="bg-blue-600 text-white w-full p-2 rounded">Envoyer le code</button>
+      </form>
+      <form id="otp-form" class="hidden">
+        <p class="mb-2 text-sm text-gray-600">Code envoyé (dev: 123456)</p>
+        <input id="otp-input" type="text" class="border w-full p-2 rounded mb-4"
+               placeholder="123456" required>
+        <button type="submit" class="bg-green-600 text-white w-full p-2 rounded">Valider</button>
+      </form>
+      <p id="login-error" class="text-red-600 text-sm mt-2 hidden"></p>
+    </div>
+  </section>
+
+  <!-- App principale (3 colonnes : sidebar | chat | infos optionnel) -->
+  <section id="app-section" class="hidden">
+    <div class="flex h-screen">
+      <aside class="w-72 bg-white border-r overflow-y-auto">
+        <div class="p-4 border-b flex items-center justify-between">
+          <div>
+            <p class="font-semibold" id="user-username">—</p>
+            <p class="text-xs text-gray-500" id="user-role">—</p>
+          </div>
+          <button id="logout-btn" class="text-sm text-red-600">Déconnexion</button>
+        </div>
+        <div class="p-3">
+          <h2 class="text-xs uppercase text-gray-500 font-bold mb-2">Channels</h2>
+          <ul id="channels-list" class="space-y-1"></ul>
+          <h2 class="text-xs uppercase text-gray-500 font-bold mt-4 mb-2">Conversations</h2>
+          <ul id="conversations-list" class="space-y-1"></ul>
+        </div>
+      </aside>
+      <main class="flex-1 flex flex-col">
+        <header id="chat-header" class="p-4 border-b bg-white">
+          <p class="text-gray-400">Sélectionne une conversation</p>
+        </header>
+        <div id="messages-list" class="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50"></div>
+        <footer id="chat-input-bar" class="p-3 border-t bg-white hidden">
+          <form id="send-form" class="flex gap-2">
+            <input id="message-input" class="flex-1 border rounded p-2"
+                   placeholder="Écrire un message..." required>
+            <button class="bg-blue-600 text-white px-4 rounded">Envoyer</button>
+          </form>
+        </footer>
+      </main>
+    </div>
+  </section>
+
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="app.js" defer></script>
+</body>
+</html>
