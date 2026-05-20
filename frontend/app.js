@@ -461,7 +461,7 @@ document.getElementById("new-dm-btn").addEventListener("click", async () => {
 document.getElementById("phone-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const phone = document.getElementById("phone-input").value.trim();
-  const { status } = await apiCall("POST", "/auth/send-otp", { phone }, false);
+  const { status } = await apiCall("POST", "/auth/request-otp", { phone }, false);
   if (status === 200) {
     currentPhone = phone;
     hideElement("phone-form");
