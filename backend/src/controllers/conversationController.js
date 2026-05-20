@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const ConversationMember = require("../models/ConversationMember");
 const Conversation = require("../models/Conversation");
+const Message = require("../models/Message");
 const User = require("../models/User");
 
 async function listMine(req, res) {
@@ -349,4 +350,71 @@ async function removeMember(req, res) {
   }
 }
 
-module.exports = { listMine, createOrGetDm, createGroup, getById, addMember, removeMember };
+async function listMessages(req, res) {
+  try {
+    const { id } = req.params;
+    const { before, limit: limitRaw } = req.query;
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ error: "INVALID_ID" });
+    }
+    if (before !== undefined && !mongoose.isValidObjectId(before)) {
+      return res.status(400).json({ error: "INVALID_BEFORE" });
+    }
+
+    const limit = limitRaw !== undefined ? parseInt(limitRaw, 10) : 50;
+    if (isNaN(limit) || limit < 1 || limit > 100) {
+      return res.status(400).json({ error: "INVALID_LIMIT" });
+    }
+
+    const conv = await Conversation.findById(id).lean();
+    if (!conv) {
+      return res.status(404).json({ error: "NOT_FOUND" });
+    }
+
+    const membership = await ConversationMember.findOne({
+      conversationId: conv._id,
+      userId: new mongoose.Types.ObjectId(req.user.userId),
+    }).lean();
+    if (!membership) {
+      return res.status(403).json({ error: "NOT_A_MEMBER" });
+    }
+
+    const filter = { conversationId: conv._id };
+    if (before) {
+      filter._id = { $lt: new mongoose.Types.ObjectId(before) };
+    }
+
+    // On fetche limit+1 pour détecter s'il reste des messages plus anciens
+    const raw = await Message.find(filter)
+      .sort({ _id: -1 })
+      .limit(limit + 1)
+      .populate("senderId", "username role")
+      .lean();
+
+    const hasMore = raw.length > limit;
+    const messages = hasMore ? raw.slice(0, limit) : raw;
+
+    const result = messages.map((m) => ({
+      id: m._id.toString(),
+      conversationId: m.conversationId.toString(),
+      content: m.content,
+      contentType: m.contentType,
+      status: m.moderation?.blocked ? "BLOCKED" : "SENT",
+      isReported: false,
+      createdAt: m.createdAt,
+      sender: m.senderId
+        ? { id: m.senderId._id.toString(), username: m.senderId.username, role: m.senderId.role }
+        : null,
+    }));
+
+    const nextCursor = hasMore ? result[result.length - 1].id : null;
+
+    return res.status(200).json({ messages: result, hasMore, nextCursor });
+  } catch (e) {
+    console.error("LIST_MESSAGES_FAILED:", e);
+    return res.status(500).json({ error: "LIST_MESSAGES_FAILED", message: e.message });
+  }
+}
+
+module.exports = { listMine, createOrGetDm, createGroup, getById, addMember, removeMember, listMessages };
