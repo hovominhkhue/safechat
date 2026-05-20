@@ -88,6 +88,9 @@ async function enterApp(user) {
   document.getElementById("user-username").textContent = user.username;
   document.getElementById("user-role").textContent     = user.role;
   document.getElementById("user-id").textContent       = user.id;
+  if (user.role === "MODERATOR" || user.role === "ADMIN") {
+    showElement("reports-btn");
+  }
   hideElement("login-section");
   showElement("app-section");
   connectSocket();
@@ -251,7 +254,7 @@ function renderMessage(msg, prepend) {
   const isBlocked  = msg.status === "BLOCKED";
 
   const wrapper = document.createElement("div");
-  wrapper.className = `flex ${isMe ? "justify-end" : "justify-start"}`;
+  wrapper.className = `group flex items-end gap-2 ${isMe ? "justify-end" : "justify-start"}`;
 
   const bubble = document.createElement("div");
   bubble.className = [
@@ -269,7 +272,35 @@ function renderMessage(msg, prepend) {
   meta.textContent = `${senderName} · ${new Date(msg.createdAt).toLocaleTimeString()}`;
   bubble.appendChild(meta);
 
-  wrapper.appendChild(bubble);
+  // Boutons d'action (visibles au hover)
+  const actions = document.createElement("div");
+  actions.className = "flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity";
+
+  if (!isMe && !isBlocked) {
+    const reportBtn = document.createElement("button");
+    reportBtn.className = "text-xs text-orange-500 hover:text-orange-700 whitespace-nowrap";
+    reportBtn.textContent = "Signaler";
+    reportBtn.addEventListener("click", () => reportMessage(msg.id));
+    actions.appendChild(reportBtn);
+  }
+
+  const isMod = currentUser?.role === "MODERATOR" || currentUser?.role === "ADMIN";
+  if (isMod && !isBlocked) {
+    const blockBtn = document.createElement("button");
+    blockBtn.className = "text-xs text-red-500 hover:text-red-700 whitespace-nowrap";
+    blockBtn.textContent = "Bloquer";
+    blockBtn.addEventListener("click", () => blockMessage(msg.id));
+    actions.appendChild(blockBtn);
+  }
+
+  // Actions à gauche de la bulle pour les messages de l'utilisateur courant
+  if (isMe) {
+    wrapper.appendChild(actions);
+    wrapper.appendChild(bubble);
+  } else {
+    wrapper.appendChild(bubble);
+    wrapper.appendChild(actions);
+  }
 
   if (prepend) {
     list.prepend(wrapper);
@@ -328,6 +359,91 @@ document.getElementById("send-form").addEventListener("submit", (e) => {
   });
   input.value = "";
 });
+
+// ── Modération : signaler / bloquer ──────────────────────────────────────────
+async function reportMessage(messageId) {
+  const reason = prompt("Pourquoi signales-tu ce message ?");
+  if (!reason || reason.trim().length < 3) return;
+  const { status, body } = await apiCall("POST", "/reports", { messageId, reason: reason.trim() });
+  if (status === 201) {
+    alert("Message signalé. Merci.");
+  } else if (status === 409) {
+    alert("Tu as déjà signalé ce message.");
+  } else {
+    console.error("reportMessage failed", status, body);
+    alert("Erreur lors du signalement.");
+  }
+}
+
+async function blockMessage(messageId) {
+  if (!confirm("Bloquer ce message ?")) return;
+  const { status, body } = await apiCall("PATCH", `/messages/${messageId}/block`);
+  if (status === 200) {
+    if (activeConversationId) await selectConversation(activeConversationId);
+  } else {
+    console.error("blockMessage failed", status, body);
+    alert("Erreur lors du blocage.");
+  }
+}
+
+// ── Modal reports (MOD/ADMIN) ─────────────────────────────────────────────────
+async function openReportsModal() {
+  const { status, body } = await apiCall("GET", "/moderation/reports?status=OPEN");
+  if (status !== 200) { console.error("openReportsModal failed", status); return; }
+
+  const reportsList = document.getElementById("reports-list");
+  reportsList.innerHTML = "";
+
+  if (body.total === 0) {
+    const empty = document.createElement("p");
+    empty.className = "text-gray-500 text-center py-4";
+    empty.textContent = "Aucun signalement ouvert.";
+    reportsList.appendChild(empty);
+  } else {
+    for (const report of body.reports) {
+      const li = document.createElement("li");
+      li.className = "border-b pb-3";
+
+      const header = document.createElement("p");
+      header.className = "text-sm";
+      const r = document.createElement("strong");
+      r.textContent = report.reporter?.username ?? "?";
+      const s = document.createElement("strong");
+      s.textContent = report.message?.sender?.username ?? "?";
+      header.appendChild(r);
+      header.append(" a signalé ");
+      header.appendChild(s);
+
+      const reason = document.createElement("p");
+      reason.className = "text-xs text-gray-500 mt-1";
+      reason.textContent = `Raison : ${report.reason}`;
+
+      const msgContent = document.createElement("p");
+      msgContent.className = "bg-gray-100 p-2 rounded text-sm mt-1";
+      msgContent.textContent = `"${report.message?.content ?? "—"}"`;
+
+      const blockBtn = document.createElement("button");
+      blockBtn.className = "mt-2 bg-red-600 text-white px-3 py-1 rounded text-xs";
+      blockBtn.textContent = "Bloquer le message";
+      blockBtn.addEventListener("click", async () => {
+        await blockMessage(report.message.id);
+        hideElement("reports-modal");
+        await openReportsModal();
+      });
+
+      li.appendChild(header);
+      li.appendChild(reason);
+      li.appendChild(msgContent);
+      li.appendChild(blockBtn);
+      reportsList.appendChild(li);
+    }
+  }
+
+  showElement("reports-modal");
+}
+
+document.getElementById("reports-btn").addEventListener("click", openReportsModal);
+document.getElementById("close-reports-btn").addEventListener("click", () => hideElement("reports-modal"));
 
 // ── Nouveau DM ────────────────────────────────────────────────────────────────
 document.getElementById("new-dm-btn").addEventListener("click", async () => {
