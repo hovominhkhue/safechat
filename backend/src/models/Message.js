@@ -8,7 +8,9 @@ const MessageSchema = new mongoose.Schema(
     content: { type: String, required: true, trim: true },
     contentType: { type: String, enum: ["TEXT"], default: "TEXT", required: true },
 
-    // (Optionnel) modération MVP
+    isReported: { type: Boolean, default: false },
+
+    // modération MVP
     moderation: {
       blocked: { type: Boolean, default: false },
       reason: { type: String },
