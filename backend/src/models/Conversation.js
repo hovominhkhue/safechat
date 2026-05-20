@@ -4,8 +4,12 @@ const ConversationSchema = new mongoose.Schema(
   {
     type: {
       type: String,
-      enum: ["DM", "GROUP"],
+      enum: ["DM", "GROUP", "CHANNEL"],
       required: true,
+    },
+    channelTopic: {
+      type: String,
+      trim: true,
     },
     channelId: {
       type: String,
@@ -45,10 +49,12 @@ const ConversationSchema = new mongoose.Schema(
 
 ConversationSchema.index({ dmKey: 1 }, { unique: true, sparse: true });
 
-// Validation simple : title obligatoire si GROUP
 ConversationSchema.pre("validate", function () {
   if (this.type === "GROUP" && !this.title) {
     this.invalidate("title", "title is required for GROUP conversations");
+  }
+  if (this.type === "CHANNEL" && !this.channelTopic) {
+    this.invalidate("channelTopic", "channelTopic is required for CHANNEL conversations");
   }
 });
 
