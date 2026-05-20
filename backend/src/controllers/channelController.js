@@ -54,4 +54,76 @@ async function listAll(req, res) {
   }
 }
 
-module.exports = { listAll };
+// Convention : topics stockés en minuscules.
+// req.params.topic est normalisé .toLowerCase() avant toute recherche.
+async function join(req, res) {
+  try {
+    const topic = req.params.topic.toLowerCase();
+    const userId = new mongoose.Types.ObjectId(req.user.userId);
+
+    const channel = await Channel.findOne({ topic }).lean();
+    if (!channel) {
+      return res.status(404).json({ error: "CHANNEL_NOT_FOUND" });
+    }
+
+    // Trouve ou crée (lazy) la Conversation CHANNEL
+    let conv = await Conversation.findOne({ type: "CHANNEL", channelTopic: topic }).lean();
+    let createdConv = false;
+
+    if (!conv) {
+      const created = await Conversation.create({
+        type: "CHANNEL",
+        channelTopic: topic,
+        channelId: `channel_${topic}`,
+        title: channel.name || `#${topic}`,
+        createdBy: userId,
+      });
+      conv = created.toObject();
+      createdConv = true;
+    }
+
+    // Idempotent : déjà membre
+    const existing = await ConversationMember.findOne({
+      conversationId: conv._id,
+      userId,
+    }).lean();
+
+    if (existing) {
+      return res.status(200).json({
+        channel: {
+          topic: channel.topic,
+          name: channel.name,
+          description: channel.description,
+          conversationId: conv._id.toString(),
+          isJoined: true,
+        },
+      });
+    }
+
+    // Crée le membership
+    try {
+      await ConversationMember.create({ conversationId: conv._id, userId, role: "MEMBER" });
+    } catch (insertErr) {
+      // Cleanup best-effort uniquement si on vient de créer cette conv
+      if (createdConv) {
+        await Conversation.deleteOne({ _id: conv._id }).catch(() => {});
+      }
+      throw insertErr;
+    }
+
+    return res.status(201).json({
+      channel: {
+        topic: channel.topic,
+        name: channel.name,
+        description: channel.description,
+        conversationId: conv._id.toString(),
+        isJoined: true,
+      },
+    });
+  } catch (e) {
+    console.error("JOIN_CHANNEL_FAILED:", e);
+    return res.status(500).json({ error: "JOIN_CHANNEL_FAILED", message: e.message });
+  }
+}
+
+module.exports = { listAll, join };
