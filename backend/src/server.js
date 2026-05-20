@@ -15,6 +15,7 @@ app.use("/auth", require("./routes/auth"));
 app.use("/conversations", require("./routes/conversations"));
 app.use("/channels", require("./routes/channels"));
 app.use("/reports", require("./routes/reports"));
+app.use("/moderation", require("./routes/moderation"));
 
 /** Health */
 app.get("/health", (req, res) => res.json({ ok: true }));
