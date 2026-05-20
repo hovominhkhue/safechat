@@ -7,9 +7,6 @@ const { Server } = require("socket.io");
 
 const connectDB = require("./config/db");
 
-// Models (ObjectId)
-const User = require("./models/User");
-
 const Conversation = require("./models/Conversation");
 const ConversationMember = require("./models/ConversationMember");
 const Message = require("./models/Message");
@@ -19,119 +16,10 @@ app.use(cors());
 app.use(express.json());
 
 app.use("/auth", require("./routes/auth"));
+app.use("/conversations", require("./routes/conversations"));
 
 /** Health */
 app.get("/health", (req, res) => res.json({ ok: true }));
-
-/**
- * DEV ONLY — Create user manually
- * POST /dev/users
- * body: { username, role? }
- */
-app.post("/dev/users", async (req, res) => {
-  try {
-    const { username, role } = req.body;
-    if (!username) return res.status(400).json({ error: "username required" });
-
-    const user = await User.create({ username, role: role || "USER" });
-    res.json({ user });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "CREATE_USER_FAILED" });
-  }
-});
-
-/**
- * DEV ONLY — Create GROUP conversation + members
- * POST /dev/conversations/group
- * body: { channelId, title, ownerId, memberIds?: [] }
- */
-app.post("/dev/conversations/group", async (req, res) => {
-  try {
-    const { channelId, title, ownerId, memberIds = [] } = req.body;
-
-    if (!channelId || !title || !ownerId) {
-      return res.status(400).json({ error: "channelId, title, ownerId required" });
-    }
-
-    if (!mongoose.isValidObjectId(ownerId)) {
-      return res.status(400).json({ error: "INVALID_OWNER_ID" });
-    }
-
-    for (const id of memberIds) {
-      if (!mongoose.isValidObjectId(id)) {
-        return res.status(400).json({ error: `INVALID_MEMBER_ID: ${id}` });
-      }
-    }
-
-    const conv = await Conversation.create({
-      type: "GROUP",
-      channelId,
-      title,
-      createdBy: new mongoose.Types.ObjectId(ownerId),
-    });
-
-    const members = [
-      {
-        conversationId: conv._id,
-        userId: new mongoose.Types.ObjectId(ownerId),
-        role: "OWNER",
-      },
-      ...memberIds.map((id) => ({
-        conversationId: conv._id,
-        userId: new mongoose.Types.ObjectId(id),
-        role: "MEMBER",
-      })),
-    ];
-
-    await ConversationMember.insertMany(members);
-
-    res.json({ conversation: conv });
-  } catch (e) {
-    console.error("CREATE_GROUP_FAILED:", e);
-    res.status(500).json({
-      error: "CREATE_GROUP_FAILED",
-      details: e.message,
-    });
-  }
-});
-
-/**
- * DEV ONLY — Create or get DM conversation + members
- * POST /dev/conversations/dm
- * body: { channelId, userAId, userBId }
- */
-app.post("/dev/conversations/dm", async (req, res) => {
-  try {
-    const { channelId, userAId, userBId } = req.body;
-    if (!channelId || !userAId || !userBId) {
-      return res.status(400).json({ error: "channelId, userAId, userBId required" });
-    }
-
-    const [a, b] = [String(userAId), String(userBId)].sort();
-    const dmKey = `${a}_${b}`;
-
-    let conv = await Conversation.findOne({ type: "DM", dmKey });
-    if (!conv) {
-      conv = await Conversation.create({
-        type: "DM",
-        channelId,
-        dmKey,
-        createdBy: userAId,
-      });
-
-      await ConversationMember.insertMany([
-        { conversationId: conv._id, userId: new mongoose.Types.ObjectId(userAId), role: "MEMBER" },
-        { conversationId: conv._id, userId: new mongoose.Types.ObjectId(userBId), role: "MEMBER" },
-      ]);
-    }
-
-    res.json({ conversation: conv });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "CREATE_DM_FAILED" });
-  }
-});
 
 /** HTTP + Socket.IO */
 const server = http.createServer(app);
