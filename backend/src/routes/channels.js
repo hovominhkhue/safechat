@@ -5,5 +5,6 @@ const channelController = require("../controllers/channelController");
 
 router.get("/", auth, channelController.listAll);
 router.post("/:topic/join", auth, channelController.join);
+router.delete("/:topic/leave", auth, channelController.leave);
 
 module.exports = router;

@@ -126,4 +126,36 @@ async function join(req, res) {
   }
 }
 
-module.exports = { listAll, join };
+async function leave(req, res) {
+  try {
+    const topic = req.params.topic.toLowerCase();
+    const userId = new mongoose.Types.ObjectId(req.user.userId);
+
+    const channel = await Channel.findOne({ topic }).lean();
+    if (!channel) {
+      return res.status(404).json({ error: "CHANNEL_NOT_FOUND" });
+    }
+
+    const conv = await Conversation.findOne({ type: "CHANNEL", channelTopic: topic }).lean();
+    if (!conv) {
+      return res.status(404).json({ error: "NOT_JOINED" });
+    }
+
+    const membership = await ConversationMember.findOne({
+      conversationId: conv._id,
+      userId,
+    }).lean();
+    if (!membership) {
+      return res.status(404).json({ error: "NOT_JOINED" });
+    }
+
+    await ConversationMember.deleteOne({ _id: membership._id });
+
+    return res.status(200).json({ ok: true });
+  } catch (e) {
+    console.error("LEAVE_CHANNEL_FAILED:", e);
+    return res.status(500).json({ error: "LEAVE_CHANNEL_FAILED", message: e.message });
+  }
+}
+
+module.exports = { listAll, join, leave };
