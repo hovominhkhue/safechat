@@ -37,13 +37,17 @@
           <div>
             <p class="font-semibold" id="user-username">—</p>
             <p class="text-xs text-gray-500" id="user-role">—</p>
+            <p class="text-[10px] text-gray-400 font-mono" id="user-id"></p>
           </div>
           <button id="logout-btn" class="text-sm text-red-600">Déconnexion</button>
         </div>
         <div class="p-3">
           <h2 class="text-xs uppercase text-gray-500 font-bold mb-2">Channels</h2>
           <ul id="channels-list" class="space-y-1"></ul>
-          <h2 class="text-xs uppercase text-gray-500 font-bold mt-4 mb-2">Conversations</h2>
+          <div class="flex items-center justify-between mt-4 mb-2">
+            <h2 class="text-xs uppercase text-gray-500 font-bold">Conversations</h2>
+            <button id="new-dm-btn" class="text-xs text-blue-600 hover:text-blue-800 font-bold">+ DM</button>
+          </div>
           <ul id="conversations-list" class="space-y-1"></ul>
         </div>
       </aside>
