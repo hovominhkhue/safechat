@@ -54,11 +54,11 @@ async function listAll(req, res) {
   }
 }
 
-// Convention : topics stockés en minuscules.
-// req.params.topic est normalisé .toLowerCase() avant toute recherche.
+// Convention : topics en MAJUSCULES (cf. enum sur Channel.topic).
+// req.params.topic est normalisé .toUpperCase() avant toute recherche.
 async function join(req, res) {
   try {
-    const topic = req.params.topic.toLowerCase();
+    const topic = req.params.topic.toUpperCase();
     const userId = new mongoose.Types.ObjectId(req.user.userId);
 
     const channel = await Channel.findOne({ topic }).lean();
@@ -66,16 +66,21 @@ async function join(req, res) {
       return res.status(404).json({ error: "CHANNEL_NOT_FOUND" });
     }
 
-    // Trouve ou crée (lazy) la Conversation CHANNEL
-    let conv = await Conversation.findOne({ type: "CHANNEL", channelTopic: topic }).lean();
+    // Trouve ou crée (lazy) la Conversation CHANNEL.
+    // On utilise channel.topic (canonique uppercase via l'enum du modèle)
+    // pour éviter tout désalignement de casse en base.
+    let conv = await Conversation.findOne({
+      type: "CHANNEL",
+      channelTopic: channel.topic,
+    }).lean();
     let createdConv = false;
 
     if (!conv) {
       const created = await Conversation.create({
         type: "CHANNEL",
-        channelTopic: topic,
-        channelId: `channel_${topic}`,
-        title: channel.name || `#${topic}`,
+        channelTopic: channel.topic,
+        channelId: `channel_${channel.topic}`,
+        title: channel.name || `#${channel.topic}`,
         createdBy: userId,
       });
       conv = created.toObject();
@@ -128,7 +133,7 @@ async function join(req, res) {
 
 async function leave(req, res) {
   try {
-    const topic = req.params.topic.toLowerCase();
+    const topic = req.params.topic.toUpperCase();
     const userId = new mongoose.Types.ObjectId(req.user.userId);
 
     const channel = await Channel.findOne({ topic }).lean();
@@ -136,7 +141,10 @@ async function leave(req, res) {
       return res.status(404).json({ error: "CHANNEL_NOT_FOUND" });
     }
 
-    const conv = await Conversation.findOne({ type: "CHANNEL", channelTopic: topic }).lean();
+    const conv = await Conversation.findOne({
+      type: "CHANNEL",
+      channelTopic: channel.topic,
+    }).lean();
     if (!conv) {
       return res.status(404).json({ error: "NOT_JOINED" });
     }
