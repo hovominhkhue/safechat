@@ -1,33 +1,35 @@
 require("dotenv").config();
 const mongoose = require("mongoose");
 const Channel = require("../models/Channel");
+const connectDB = require("../config/db");
 
 const CHANNELS = [
-  { topic: "general", name: "General", description: "General discussion for everyone" },
-  { topic: "engineering", name: "Engineering", description: "Technical engineering topics" },
-  { topic: "product", name: "Product", description: "Product updates and discussions" },
-  { topic: "design", name: "Design", description: "UI/UX design discussions" },
-  { topic: "devops", name: "DevOps", description: "Infrastructure and deployment" },
-  { topic: "random", name: "Random", description: "Off-topic and fun discussions" },
+  { topic: "IA", name: "Intelligence Artificielle", description: "Discussions IA, ML, LLM" },
+  { topic: "BACKEND", name: "Backend", description: "APIs, bases de données, architecture serveur" },
+  { topic: "FRONTEND", name: "Frontend", description: "UI, UX, frameworks front" },
+  { topic: "DEVOPS", name: "DevOps", description: "CI/CD, Docker, cloud, monitoring" },
+  { topic: "ETUDES", name: "Études", description: "Cours, projets école, ressources d'apprentissage" },
+  { topic: "PROJETS", name: "Projets", description: "Partage de side-projects et collaborations" },
 ];
 
-async function seed() {
-  await mongoose.connect(process.env.MONGODB_URI);
-  console.log("✅ MongoDB connected");
-
-  const count = await Channel.countDocuments();
-  if (count > 0) {
-    console.log(`ℹ️  ${count} channels already in DB — skipping seed.`);
+(async () => {
+  try {
+    await connectDB();
+    for (const c of CHANNELS) {
+      const existing = await Channel.findOne({ topic: c.topic });
+      if (existing) {
+        console.log(`SKIP : ${c.topic} existe déjà`);
+      } else {
+        await Channel.create(c);
+        console.log(`CREATED : ${c.topic}`);
+      }
+    }
+    const total = await Channel.countDocuments();
+    console.log(`\n✅ ${total} channels en base`);
+  } catch (e) {
+    console.error("❌ Seed failed:", e);
+    process.exit(1);
+  } finally {
     await mongoose.disconnect();
-    return;
   }
-
-  await Channel.insertMany(CHANNELS);
-  console.log(`✅ ${CHANNELS.length} channels seeded.`);
-  await mongoose.disconnect();
-}
-
-seed().catch((err) => {
-  console.error("❌ Seed failed:", err);
-  process.exit(1);
-});
+})();
