@@ -1,11 +1,26 @@
+const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 
-// Fake auth : le client passe userId en query string.
-// Sera remplacé par du JWT en 6.2.
-module.exports = function fakeAuthMiddleware(socket, next) {
-  const { userId } = socket.handshake.query || {};
-  if (!userId) return next(new Error("Missing userId (fake auth)"));
-  if (!mongoose.isValidObjectId(userId)) return next(new Error("Invalid userId"));
-  socket.data.userId = new mongoose.Types.ObjectId(userId);
-  return next();
+// Ordre de lecture du token :
+// 1. socket.handshake.auth.token       (recommandé)
+// 2. Authorization: Bearer <token>     (header HTTP upgrade)
+// 3. socket.handshake.query.token      (fallback dev)
+module.exports = function jwtAuthMiddleware(socket, next) {
+  const authHeader = socket.handshake.headers?.authorization;
+  const token =
+    socket.handshake.auth?.token ||
+    (authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null) ||
+    socket.handshake.query?.token ||
+    null;
+
+  if (!token) return next(new Error("NO_TOKEN"));
+
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    socket.data.userId = new mongoose.Types.ObjectId(payload.userId);
+    socket.data.role = payload.role;
+    return next();
+  } catch {
+    return next(new Error("INVALID_TOKEN"));
+  }
 };

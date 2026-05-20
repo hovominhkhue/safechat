@@ -7,8 +7,8 @@
 <body>
   <h2>SafeChat Demo</h2>
 
-  <label>User ID :</label>
-  <input id="userId" placeholder="Paste user ObjectId here" />
+  <label>JWT Token :</label>
+  <input id="jwtToken" placeholder="Paste JWT token here" style="width:400px" />
   <br><br>
 
   <label>Conversation ID :</label>
@@ -26,7 +26,7 @@
   <script>
     let socket = null;
 
-    const userIdInput = document.getElementById("userId");
+    const jwtTokenInput = document.getElementById("jwtToken");
     const conversationIdInput = document.getElementById("conversationId");
     const messageInput = document.getElementById("message");
     const messagesList = document.getElementById("messages");
@@ -39,26 +39,32 @@
     }
 
     connectBtn.onclick = () => {
-      const userId = userIdInput.value.trim();
+      const token = jwtTokenInput.value.trim();
       const conversationId = conversationIdInput.value.trim();
 
-      if (!userId || !conversationId) {
-        alert("Please enter userId and conversationId");
+      if (!token || !conversationId) {
+        alert("Please enter JWT token and conversationId");
         return;
       }
 
-      // Déconnecter l'ancien socket s'il existe déjà
       if (socket) {
         socket.disconnect();
       }
 
       socket = io("http://localhost:3001", {
-        query: { userId }
+        auth: { token }
       });
 
       socket.on("connect", () => {
         console.log("Connected:", socket.id);
         socket.emit("conversation:join", { conversationId });
+      });
+
+      socket.on("connect_error", (err) => {
+        console.error("Connection error:", err.message);
+        alert("Connection error: " + err.message);
+        connectBtn.disabled = false;
+        connectBtn.textContent = "Connect + Join";
       });
 
       socket.on("conversation:joined", (data) => {
