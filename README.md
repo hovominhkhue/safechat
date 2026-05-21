@@ -1,5 +1,7 @@
 # 💬 SafeChat
 
+[![CI](https://github.com/hovominhkhue/safechat/actions/workflows/ci.yml/badge.svg)](https://github.com/hovominhkhue/safechat/actions/workflows/ci.yml)
+
 Messagerie temps réel orientée développeurs, avec authentification OTP, channels par thématique technique, conversations privées et modération intégrée.
 
 Projet école — Master, livré comme MVP fonctionnel et démontrable.
