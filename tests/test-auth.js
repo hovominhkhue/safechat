@@ -2,7 +2,7 @@
 // Exit 0 = all assertions passed. Exit 1 = at least one failure.
 
 const BASE = "http://localhost:3001";
-const PHONE = "0699999999";
+const PHONE = `06${Date.now().toString().slice(-8)}`;
 const OTP = process.env.OTP_FAKE_CODE || "123456";
 
 let failures = 0;
@@ -22,7 +22,12 @@ async function post(path, body) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  const json = await res.json();
+
+  let json = {};
+  try {
+    json = await res.json();
+  } catch {}
+
   return { status: res.status, body: json };
 }
 
@@ -30,7 +35,12 @@ async function get(path, token) {
   const res = await fetch(`${BASE}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  const json = await res.json();
+
+  let json = {};
+  try {
+    json = await res.json();
+  } catch {}
+
   return { status: res.status, body: json };
 }
 
