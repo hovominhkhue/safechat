@@ -62,23 +62,27 @@ async function run() {
   const userBId = userB.user?._id || userB.user?.id;
   assert("user B id present", typeof userBId === "string");
 
-  console.log("\n[2] POST /conversations");
+  console.log("\n[2] POST /conversations/dm");
   const createConversation = await request(
     "POST",
-    "/conversations",
-    { participantId: userBId },
+    "/conversations/dm",
+    { otherUserId: userBId },
     userA.token
   );
 
-  assert("status 201 or 200", [200, 201].includes(createConversation.status), `got ${createConversation.status}`);
+  assert(
+    "status 201 or 200",
+    [200, 201].includes(createConversation.status),
+    `got ${createConversation.status} ${JSON.stringify(createConversation.body)}`
+  );
 
   const conversationId =
-    createConversation.body._id ||
-    createConversation.body.id ||
     createConversation.body.conversation?._id ||
-    createConversation.body.conversation?.id;
+    createConversation.body.conversation?.id ||
+    createConversation.body._id ||
+    createConversation.body.id;
 
-  assert("conversation id present", typeof conversationId === "string");
+  assert("conversation id present", typeof conversationId === "string", JSON.stringify(createConversation.body));
 
   console.log("\n[3] GET /conversations");
   const listConversations = await request("GET", "/conversations", null, userA.token);
