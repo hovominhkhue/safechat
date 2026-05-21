@@ -63,9 +63,13 @@ function waitEvent(socket, event, timeout = 3000) {
 // ---------- Main ----------
 (async () => {
   header("Setup : auth UserA et UserB");
-  const A = await authenticate("0611111111");
-  const B = await authenticate("0622222222");
-  const C = await authenticate("0633333333");
+
+  const suffix = Date.now().toString().slice(-8);
+
+  const A = await authenticate(`06${suffix}`);
+  const B = await authenticate(`07${suffix}`);
+  const C = await authenticate(`08${suffix}`);
+  
   console.log("UserA =", A.id);
   console.log("UserB =", B.id);
   console.log("UserC =", C.id);
@@ -102,7 +106,16 @@ function waitEvent(socket, event, timeout = 3000) {
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${A.token}` },
     body: JSON.stringify({ otherUserId: B.id }),
   });
-  const convId = dm.body.conversation.id;
+
+  if (![200, 201].includes(dm.status)) {
+    throw new Error(`DM_CREATE_FAILED: status ${dm.status} ${JSON.stringify(dm.body)}`);
+  }
+
+  const convId = dm.body.conversation?.id || dm.body.conversation?._id || dm.body.id || dm.body._id;
+
+  if (!convId) {
+    throw new Error(`CONVERSATION_ID_NOT_FOUND: ${JSON.stringify(dm.body)}`);
+  }
   console.log("DM convId =", convId);
 
   console.log("[DEBUG] sockA emits conversation:join");
