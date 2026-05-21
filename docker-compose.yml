@@ -1,4 +1,21 @@
 services:
+  backend:
+    build:
+      context: ./
+      dockerfile: ./backend/Dockerfile
+    container_name: safechat-backend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - MONGODB_URI=mongodb://mongodb:27017/safechat
+      - JWT_SECRET=${JWT_SECRET:-safechat_dev_secret_changeme}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
+      - OTP_FAKE_CODE=${OTP_FAKE_CODE:-123456}
+    depends_on:
+      - mongodb
+
   mongodb:
     image: mongo:7
     container_name: safechat-mongo
