@@ -67,21 +67,23 @@ function getReportStatusFromDb(messageId) {
   header("Setup : 3 users, promotion A en MODERATOR, DM + message");
 
   // 1. Auth les 3 users
-  let A = await authenticate("0611111111");
-  const B = await authenticate("0622222222");
-  const C = await authenticate("0633333333");
+  const suffix = Date.now().toString().slice(-8);
+
+  let A = await authenticate(`06${suffix}`);
+  const B = await authenticate(`07${suffix}`);
+  const C = await authenticate(`08${suffix}`);
   console.log("UserA =", A.id, "(role JWT initial:", A.role + ")");
   console.log("UserB =", B.id);
   console.log("UserC =", C.id);
 
   // 2. Promouvoir UserA en MODERATOR
-  promoteUserRole("0611111111", "MODERATOR");
+  promoteUserRole(A.phone, "MODERATOR");
   log("UserA promu MODERATOR en base");
 
   await new Promise(r => setTimeout(r, 500));
 
   // 3. UserA se réauthentifie pour avoir un JWT avec role=MODERATOR
-  A = await authenticate("0611111111");
+  A = await authenticate(A.phone);
   console.log("UserA role après re-auth:", A.role);
   if (A.role !== "MODERATOR") {
     console.error("❌ Le JWT ne reflète pas le nouveau rôle. Abandon.");
