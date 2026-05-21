@@ -47,6 +47,7 @@ des features.
 - [x] `06-adr/ADR-001-choix-mongodb.md` rédigé
 - [x] `06-adr/ADR-002-otp-simule.md` rédigé
 - [x] `06-adr/ADR-003-websocket-socketio.md` rédigé
+- [x] `06-adr/ADR-004-frontend-vanilla.md` rédigé
 - [x] Chaque ADR : 1 page, contexte / options / décision /
       justification / conséquences
 
@@ -61,15 +62,15 @@ des features.
 - [x] Dossier `00-kickoff-pack/` créé à la racine du repo
 - [x] Les 8 livrables présents et versionnés sur Git (branche
       `docs/kickoff-pack` ou directement `main`)
-- [ ] Relu par un pair ou par l'encadrant projet
-- [ ] Validé avant de passer à la phase de développement
+- [x] Relu par un pair ou par l'encadrant projet
+- [x] Validé avant de passer à la phase de développement
 
 ---
 
 ## Signature
 
-**Signé :** ___________________  
-**Date :** ___ / ___ / 2026  
+**Signé :** HO Vo Minh Khue  
+**Date :** 20 / 05 / 2026  
 **Pour SafeChat — projet école Master**
 
 ---
@@ -83,6 +84,39 @@ des features.
 | 03 | domain-model.md | ✅ Complet |
 | 04 | database.md | ✅ Complet |
 | 05 | architecture.md | ✅ Complet |
-| 06 | 3 ADRs dans 06-adr/ | ✅ Complet |
+| 06 | 4 ADRs dans 06-adr/ | ✅ Complet |
 | 07 | tech-debt-register.md | ✅ Complet |
 | 08 | definition-of-done.md | ✅ Complet (ce fichier) |
+
+---
+
+## État de la livraison MVP (au 2026-05-20)
+
+Toutes les fonctionnalités de la DoD ont été livrées et validées
+par des tests d'intégration scriptés (dossier `/tests`).
+
+### DoD originale
+
+- [x] `docker compose up --build` lance backend + mongo
+- [x] Auth via OTP simulé + JWT
+- [x] Création / adhésion à un channel
+- [x] Chat temps réel entre 2 onglets
+- [x] Persistance et reload de l'historique
+- [x] DM entre 2 utilisateurs
+- [x] Signalement persisté
+- [x] Code sur Git, secrets non commités
+
+### Livré en bonus (au-delà du strict MVP)
+
+- [x] Modération complète : blocage de message + panneau reports MOD/ADMIN
+- [x] Frontend SPA vanilla JS + Tailwind CDN servi par Express
+- [x] Tests d'intégration end-to-end pour chaque étape (auth,
+      conversations, channels, messaging, reports)
+
+### Reste à livrer pour fermer le checkpoint complet
+
+- [ ] README propre à la racine du repo (quickstart, captures, lien
+      vers le Kickoff Pack)
+- [ ] CI/CD GitHub Actions (lint + build, badge passing)
+- [ ] Tests Jest unitaires (compléter les tests d'intégration
+      scriptés)
