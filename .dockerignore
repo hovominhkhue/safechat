@@ -1,0 +1,11 @@
+**/node_modules
+**/.env
+**/.env.local
+**/.git
+**/.gitignore
+**/.vscode
+**/.idea
+**/*.log
+tests/
+client.html
+00-kickoff-pack/
