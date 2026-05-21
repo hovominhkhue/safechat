@@ -7,20 +7,23 @@ on:
     branches: [main]
 
 jobs:
-
   lint:
     name: Lint backend
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: backend/package-lock.json
+
       - name: Install backend dependencies
         working-directory: ./backend
         run: npm ci
+
       - name: Run ESLint
         working-directory: ./backend
         run: npm run lint
@@ -28,6 +31,7 @@ jobs:
   smoke-test:
     name: Smoke test backend
     runs-on: ubuntu-latest
+
     services:
       mongodb:
         image: mongo:7
@@ -38,30 +42,37 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+
     env:
       MONGODB_URI: mongodb://localhost:27017/safechat_ci
       JWT_SECRET: ci_test_secret
       JWT_EXPIRES_IN: 7d
       OTP_FAKE_CODE: '123456'
       PORT: '3001'
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: backend/package-lock.json
+
       - name: Install backend dependencies
         working-directory: ./backend
         run: npm ci
+
       - name: Seed channels
         working-directory: ./backend
         run: node src/scripts/seedChannels.js
+
       - name: Start backend in background
         working-directory: ./backend
         run: |
           node src/server.js &
           echo $! > backend.pid
+
       - name: Wait for backend to be ready
         run: |
           for i in {1..20}; do
@@ -73,16 +84,25 @@ jobs:
           done
           echo "Backend did not start in time"
           exit 1
+
       - name: Health check
         run: |
           RESPONSE=$(curl -s http://localhost:3001/health)
           echo "Health response: $RESPONSE"
           echo "$RESPONSE" | grep -q '"ok":true' || exit 1
-      - name: Run integration test (auth)
+
+      - name: Install test dependencies
+        working-directory: ./tests
+        run: npm install
+
+      - name: Run smoke tests
         working-directory: ./tests
         run: |
-          npm install
           node test-auth.js
+          node test-conversations.js
+          node test-single-socket.js
+          node test-messaging.js
+
       - name: Stop backend
         if: always()
         working-directory: ./backend
@@ -90,3 +110,4 @@ jobs:
           if [ -f backend.pid ]; then
             kill $(cat backend.pid) || true
           fi
+          
