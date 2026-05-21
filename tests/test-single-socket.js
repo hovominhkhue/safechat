@@ -1,23 +1,25 @@
 // tests/test-single-socket.js
 const { io } = require("socket.io-client");
 
+const BASE = "http://localhost:3001";
+const phone = `06${Date.now().toString().slice(-8)}`;
+
 (async () => {
-  // Récupère un token
-  await fetch("http://localhost:3001/auth/request-otp", {
+  await fetch(`${BASE}/auth/request-otp`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ phone: "0611111111" })
+    body: JSON.stringify({ phone })
   });
-  const r = await fetch("http://localhost:3001/auth/verify-otp", {
+
+  const r = await fetch(`${BASE}/auth/verify-otp`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ phone: "0611111111", otp: "123456" })
+    body: JSON.stringify({ phone, otp: "123456" })
   }).then(r => r.json());
 
   console.log("Token obtenu :", r.token.slice(0, 30) + "...");
 
-  // UNE seule connexion avec le vrai token
-  const socket = io("http://localhost:3001", {
+  const socket = io(BASE, {
     auth: { token: r.token },
     reconnection: false
   });
