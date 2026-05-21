@@ -6,7 +6,6 @@ const OTP = process.env.OTP_FAKE_CODE || "123456";
 
 const PHONE_A = `06${Date.now().toString().slice(-8)}`;
 const PHONE_B = `07${Date.now().toString().slice(-8)}`;
-const CHANNEL_NAME = `test-channel-${Date.now()}`;
 
 let failures = 0;
 
@@ -61,41 +60,59 @@ async function run() {
   assert("user A token present", typeof userA.token === "string");
   assert("user B token present", typeof userB.token === "string");
 
-  console.log("\n[2] POST /channels");
-  const createChannel = await request(
-    "POST",
-    "/channels",
-    { name: CHANNEL_NAME },
-    userA.token
-  );
-
-  assert("status 201", createChannel.status === 201, `got ${createChannel.status}`);
-  assert("channel name matches", createChannel.body.name === CHANNEL_NAME);
-
-  const channelId = createChannel.body._id || createChannel.body.id;
-  assert("channel id present", typeof channelId === "string");
-
-  console.log("\n[3] GET /channels");
+  console.log("\n[2] GET /channels");
   const listChannels = await request("GET", "/channels", null, userA.token);
 
   assert("status 200", listChannels.status === 200, `got ${listChannels.status}`);
-  assert("body is array", Array.isArray(listChannels.body));
+  assert(
+    "channels array exists",
+    Array.isArray(listChannels.body.channels),
+    JSON.stringify(listChannels.body)
+  );
+  assert(
+    "at least one channel exists",
+    listChannels.body.channels.length > 0,
+    JSON.stringify(listChannels.body.channels)
+  );
 
-  console.log("\n[4] POST /channels/:id/join");
+  const firstChannel = listChannels.body.channels[0];
+  const topic = firstChannel?.topic;
+
+  assert("channel topic present", typeof topic === "string", JSON.stringify(firstChannel));
+
+  console.log("\n[3] POST /channels/:topic/join");
   const joinChannel = await request(
     "POST",
-    `/channels/${channelId}/join`,
+    `/channels/${topic}/join`,
     null,
     userB.token
   );
 
-  assert("status 200 or 204", [200, 204].includes(joinChannel.status), `got ${joinChannel.status}`);
+  assert(
+    "status 200 or 201",
+    [200, 201].includes(joinChannel.status),
+    `got ${joinChannel.status} ${JSON.stringify(joinChannel.body)}`
+  );
 
-  console.log("\n[5] GET /channels/:id");
-  const getChannel = await request("GET", `/channels/${channelId}`, null, userB.token);
+  assert(
+    "conversationId returned after join",
+    typeof joinChannel.body.channel?.conversationId === "string",
+    JSON.stringify(joinChannel.body)
+  );
 
-  assert("status 200", getChannel.status === 200, `got ${getChannel.status}`);
-  assert("channel id matches", (getChannel.body._id || getChannel.body.id) === channelId);
+  console.log("\n[4] DELETE /channels/:topic/leave");
+  const leaveChannel = await request(
+    "DELETE",
+    `/channels/${topic}/leave`,
+    null,
+    userB.token
+  );
+
+  assert(
+    "status 200",
+    leaveChannel.status === 200,
+    `got ${leaveChannel.status} ${JSON.stringify(leaveChannel.body)}`
+  );
 
   console.log(`\n── Result: ${failures === 0 ? "ALL PASSED" : `${failures} FAILURE(S)`} ──\n`);
   if (failures > 0) process.exit(1);
