@@ -93,7 +93,7 @@ jobs:
 
       - name: Install test dependencies
         working-directory: ./tests
-        run: npm install
+        run: npm install socket.io-client
 
       - name: Run smoke tests
         working-directory: ./tests
