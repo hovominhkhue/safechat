@@ -1,18 +1,34 @@
 require("dotenv").config();
+
 const http = require("http");
+const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const { Server } = require("socket.io");
 
-const path = require("path");
 const connectDB = require("./config/db");
 const setupSockets = require("./sockets");
 
 const app = express();
+
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "../../frontend")));
 
+// Frontend folder: C:\safechat\frontend
+const frontendPath = path.join(__dirname, "../../frontend");
+
+// Désactive le cache en dev pour voir les modifications directement
+app.use(
+  express.static(frontendPath, {
+    etag: false,
+    lastModified: false,
+    setHeaders: (res) => {
+      res.setHeader("Cache-Control", "no-store");
+    },
+  })
+);
+
+// API routes
 app.use("/auth", require("./routes/auth"));
 app.use("/conversations", require("./routes/conversations"));
 app.use("/channels", require("./routes/channels"));
@@ -20,16 +36,32 @@ app.use("/reports", require("./routes/reports"));
 app.use("/moderation", require("./routes/moderation"));
 app.use("/messages", require("./routes/messages"));
 
-/** Health */
-app.get("/health", (req, res) => res.json({ ok: true }));
+// Health check
+app.get("/health", (req, res) => {
+  res.json({ ok: true });
+});
 
-/** HTTP + Socket.IO */
+// Page principale
+app.get("/", (req, res) => {
+  res.sendFile(path.join(frontendPath, "index.html"));
+});
+
+// HTTP + Socket.IO
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+  },
+});
+
 setupSockets(io);
 
-/** Start */
+// Start
 const PORT = process.env.PORT || 3001;
 
 connectDB();
-server.listen(PORT, () => console.log(`✅ Server on http://localhost:${PORT}`));
+
+server.listen(PORT, () => {
+  console.log(`✅ Server running on http://localhost:${PORT}`);
+  console.log(`📁 Frontend served from: ${frontendPath}`);
+});

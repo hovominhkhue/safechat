@@ -69,6 +69,7 @@
 
       socket.on("conversation:joined", (data) => {
         console.log("Joined conversation:", data.conversationId);
+        addMessage(`✅ Joined conversation ${data.conversationId}`);
       });
 
       socket.on("conversation:error", (err) => {
@@ -77,7 +78,14 @@
       });
 
       socket.on("message:new", (msg) => {
-        addMessage(`${msg.senderId}: ${msg.content}`);
+        const sender =
+          msg.sender?.username ||
+          msg.sender?.phone ||
+          msg.senderId ||
+          msg.sender ||
+          "unknown";
+
+        addMessage(`${sender}: ${msg.content}`);
       });
 
       socket.on("message:ack", (ack) => {

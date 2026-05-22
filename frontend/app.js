@@ -1,25 +1,41 @@
 // ── État global ──────────────────────────────────────────────────────────────
 const TOKEN_KEY = "safechat_token";
-const API_BASE  = "";
+const API_BASE = "";
 
-let currentUser          = null;
-let currentPhone         = null;
+let currentUser = null;
+let currentPhone = null;
 let activeConversationId = null;
-let socket               = null;
-let isLoadingMore        = false;
+let socket = null;
+let isLoadingMore = false;
 
-const joinedConvs   = new Set();    // convIds déjà joints côté socket
-const oldestByConv  = new Map();    // convId → id du plus vieux msg chargé (cursor)
-const hasMoreByConv = new Map();    // convId → bool
+const joinedConvs = new Set();
+const oldestByConv = new Map();
+const hasMoreByConv = new Map();
+const renderedMessageIds = new Set();
 
-// ── Utilitaires token ─────────────────────────────────────────────────────────
-function getToken()   { return localStorage.getItem(TOKEN_KEY); }
-function setToken(t)  { localStorage.setItem(TOKEN_KEY, t); }
-function clearToken() { localStorage.removeItem(TOKEN_KEY); }
+// ── Token ────────────────────────────────────────────────────────────────────
+function getToken() {
+  return localStorage.getItem(TOKEN_KEY);
+}
 
-// ── Utilitaires DOM ───────────────────────────────────────────────────────────
-function showElement(id) { document.getElementById(id).classList.remove("hidden"); }
-function hideElement(id) { document.getElementById(id).classList.add("hidden"); }
+function setToken(token) {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+function clearToken() {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+// ── DOM ──────────────────────────────────────────────────────────────────────
+function showElement(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.remove("hidden");
+}
+
+function hideElement(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.add("hidden");
+}
 
 function showError(message) {
   const el = document.getElementById("login-error");
@@ -27,98 +43,185 @@ function showError(message) {
   el.classList.remove("hidden");
 }
 
-// ── API helper ────────────────────────────────────────────────────────────────
+// ── API ──────────────────────────────────────────────────────────────────────
 async function apiCall(method, path, body = null, withAuth = true) {
   const headers = { "Content-Type": "application/json" };
+
   if (withAuth) {
     const token = getToken();
-    if (token) headers["Authorization"] = `Bearer ${token}`;
+    if (token) headers.Authorization = `Bearer ${token}`;
   }
+
   const options = { method, headers };
   if (body !== null) options.body = JSON.stringify(body);
-  const res  = await fetch(`${API_BASE}${path}`, options);
-  const data = await res.json().catch(() => ({}));
+
+  const res = await fetch(`${API_BASE}${path}`, options);
+
+  let data = {};
+  try {
+    data = await res.json();
+  } catch {}
+
   return { status: res.status, body: data };
 }
 
-// ── Socket ────────────────────────────────────────────────────────────────────
+// ── Socket ───────────────────────────────────────────────────────────────────
 function connectSocket() {
-  socket = io(API_BASE || "/", { auth: { token: getToken() } });
-  socket.on("connect",           () => console.log("[socket] connected", socket.id));
-  socket.on("connect_error",     (err) => console.error("[socket] error:", err.message));
-  socket.on("message:new",       onMessageNew);
-  socket.on("conversation:error",(e) => console.warn("[socket] conv error:", e));
+  if (socket) socket.disconnect();
+
+  socket = io(API_BASE || "/", {
+    auth: { token: getToken() },
+    reconnection: true,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000,
+  });
+
+  socket.on("connect", () => {
+    console.log("[socket] connected", socket.id);
+
+    if (activeConversationId && !joinedConvs.has(activeConversationId)) {
+      socket.emit("conversation:join", { conversationId: activeConversationId });
+      joinedConvs.add(activeConversationId);
+    }
+  });
+
+  socket.on("connect_error", (err) => {
+    console.error("[socket] error:", err.message);
+  });
+
+  socket.on("conversation:joined", (data) => {
+    console.log("[socket] joined conversation", data);
+  });
+
+  socket.on("conversation:error", (err) => {
+    console.warn("[socket] conversation error:", err);
+  });
+
+  socket.on("message:new", onMessageNew);
+
+  socket.on("message:ack", (ack) => {
+    console.log("[socket] message ack:", ack);
+  });
+
+  socket.on("message:error", (err) => {
+    console.error("[socket] message error:", err);
+    alert("Erreur lors de l'envoi du message.");
+  });
 }
 
 function onMessageNew(msg) {
   if (msg.conversationId !== activeConversationId) return;
-  // Normalise le format socket vers le format API (sender.id/username)
+  if (msg.id && renderedMessageIds.has(msg.id)) return;
+
+  const senderId = msg.sender?.id || msg.senderId;
+
   const normalized = {
     ...msg,
     sender: {
-      id:       msg.senderId,
-      username: msg.senderId === currentUser?.id
-        ? currentUser.username
-        : msg.senderId.slice(0, 8),
+      id: senderId,
+      username:
+        msg.sender?.username ||
+        (senderId === currentUser?.id
+          ? currentUser.username
+          : senderId?.slice(0, 8) || "?"),
     },
     status: msg.status || "SENT",
+    createdAt: msg.createdAt || new Date().toISOString(),
   };
+
   renderMessage(normalized, false);
   scrollToBottom();
 }
 
-// ── Bootstrap ─────────────────────────────────────────────────────────────────
+// ── Bootstrap ────────────────────────────────────────────────────────────────
 async function bootstrap() {
   const token = getToken();
+
   if (token) {
     const { status, body } = await apiCall("GET", "/auth/me");
+
     if (status === 200) {
       await enterApp(body.user);
       return;
     }
+
     clearToken();
   }
-  showElement("login-section");
+
+  showElement("home-section");
+  hideElement("login-section");
   hideElement("app-section");
 }
 
-// ── Entrée dans l'app ─────────────────────────────────────────────────────────
+// ── Page accueil → login ─────────────────────────────────────────────────────
+function initHomeButtons() {
+  const openLogin = () => {
+    hideElement("home-section");
+    showElement("login-section");
+    hideElement("app-section");
+  };
+
+  document.getElementById("go-login-btn")?.addEventListener("click", openLogin);
+  document.getElementById("go-start-btn")?.addEventListener("click", openLogin);
+  document.getElementById("hero-start-btn")?.addEventListener("click", openLogin);
+  document.getElementById("hero-demo-btn")?.addEventListener("click", openLogin);
+}
+
+// ── Entrée app ───────────────────────────────────────────────────────────────
 async function enterApp(user) {
   currentUser = user;
-  document.getElementById("user-username").textContent = user.username;
-  document.getElementById("user-role").textContent     = user.role;
-  document.getElementById("user-id").textContent       = user.id;
+
+  document.getElementById("user-username").textContent =
+    user.username || user.phone || "Utilisateur";
+  document.getElementById("user-role").textContent = user.role || "USER";
+  document.getElementById("user-id").textContent = user.id;
+
   if (user.role === "MODERATOR" || user.role === "ADMIN") {
     showElement("reports-btn");
+  } else {
+    hideElement("reports-btn");
   }
+
+  hideElement("home-section");
   hideElement("login-section");
   showElement("app-section");
+
   connectSocket();
+
   await loadChannels();
   await loadConversations();
 }
 
-// ── Channels ──────────────────────────────────────────────────────────────────
+// ── Channels ─────────────────────────────────────────────────────────────────
 async function loadChannels() {
   const { status, body } = await apiCall("GET", "/channels");
-  if (status !== 200) { console.error("loadChannels failed", status); return; }
+
+  if (status !== 200) {
+    console.error("loadChannels failed", status, body);
+    return;
+  }
 
   const list = document.getElementById("channels-list");
   list.innerHTML = "";
 
-  for (const ch of body.channels) {
-    const isActive = ch.conversationId && ch.conversationId === activeConversationId;
+  const channels = body.channels || [];
+
+  for (const ch of channels) {
+    const isActive = ch.conversationId === activeConversationId;
 
     const li = document.createElement("li");
     li.className = [
       "flex items-center justify-between px-2 py-1 rounded text-sm",
       ch.isJoined ? "bg-blue-100" : "bg-gray-50 hover:bg-gray-100",
       isActive ? "ring-2 ring-blue-500" : "",
-    ].filter(Boolean).join(" ");
+    ]
+      .filter(Boolean)
+      .join(" ");
 
     const label = document.createElement("span");
     label.className = "flex-1 truncate";
-    label.textContent = `# ${ch.topic} (${ch.name})`;
+    label.textContent = `# ${ch.topic || ch.name}`;
+
     if (ch.isJoined && ch.conversationId) {
       label.classList.add("cursor-pointer");
       label.addEventListener("click", () => selectConversation(ch.conversationId));
@@ -126,12 +229,20 @@ async function loadChannels() {
 
     const btn = document.createElement("button");
     btn.className = `ml-2 text-xs font-bold px-1.5 rounded ${
-      ch.isJoined ? "text-blue-600 hover:text-red-500" : "text-green-600 hover:text-green-800"
+      ch.isJoined
+        ? "text-blue-600 hover:text-red-500"
+        : "text-green-600 hover:text-green-800"
     }`;
     btn.textContent = ch.isJoined ? "×" : "+";
-    btn.addEventListener("click", (e) => {
+
+    btn.addEventListener("click", async (e) => {
       e.stopPropagation();
-      ch.isJoined ? leaveChannel(ch.topic, ch.conversationId) : joinChannel(ch.topic);
+
+      if (ch.isJoined) {
+        await leaveChannel(ch.topic, ch.conversationId);
+      } else {
+        await joinChannel(ch.topic);
+      }
     });
 
     li.appendChild(label);
@@ -141,49 +252,85 @@ async function loadChannels() {
 }
 
 async function joinChannel(topic) {
-  const { status } = await apiCall("POST", `/channels/${topic}/join`);
-  if (status !== 200 && status !== 201) { console.error("joinChannel failed", status); return; }
+  const { status, body } = await apiCall("POST", `/channels/${topic}/join`);
+
+  if (![200, 201].includes(status)) {
+    console.error("joinChannel failed", status, body);
+    alert("Erreur lors de l'adhésion au channel.");
+    return;
+  }
+
   await loadChannels();
   await loadConversations();
 }
 
 async function leaveChannel(topic, conversationId) {
-  const { status } = await apiCall("DELETE", `/channels/${topic}/leave`);
-  if (status !== 200) { console.error("leaveChannel failed", status); return; }
+  const { status, body } = await apiCall("DELETE", `/channels/${topic}/leave`);
+
+  if (status !== 200) {
+    console.error("leaveChannel failed", status, body);
+    alert("Erreur lors de la sortie du channel.");
+    return;
+  }
+
   if (conversationId === activeConversationId) {
     activeConversationId = null;
     updateChatHeader(null);
     hideElement("chat-input-bar");
+    document.getElementById("messages-list").innerHTML = "";
   }
+
   await loadChannels();
   await loadConversations();
 }
 
-// ── Conversations ─────────────────────────────────────────────────────────────
+// ── Conversations ────────────────────────────────────────────────────────────
 async function loadConversations() {
   const { status, body } = await apiCall("GET", "/conversations");
-  if (status !== 200) { console.error("loadConversations failed", status); return; }
+
+  if (status !== 200) {
+    console.error("loadConversations failed", status, body);
+    return;
+  }
 
   const list = document.getElementById("conversations-list");
   list.innerHTML = "";
 
-  const convs = body.conversations.filter(c => c.type === "DM" || c.type === "GROUP");
+  const conversations = body.conversations || body || [];
+  const convs = Array.isArray(conversations)
+    ? conversations.filter((c) => c.type === "DM" || c.type === "GROUP")
+    : [];
 
   for (const conv of convs) {
-    const isActive = conv.id === activeConversationId;
+    const convId = conv.id || conv._id;
+    const isActive = convId === activeConversationId;
 
     const li = document.createElement("li");
     li.className = [
       "px-2 py-1 rounded cursor-pointer text-sm",
       "bg-gray-50 hover:bg-gray-100",
       isActive ? "ring-2 ring-blue-500" : "",
-    ].filter(Boolean).join(" ");
+    ]
+      .filter(Boolean)
+      .join(" ");
 
     const nameEl = document.createElement("p");
     nameEl.className = "font-medium";
-    nameEl.textContent = conv.type === "DM"
-      ? `@ DM ${conv.id.slice(0, 6)}`
-      : `# ${conv.name || "Groupe"}`;
+
+    const other = conv.participants?.find(
+      (p) => (p.id || p._id) !== currentUser?.id
+    );
+
+    nameEl.textContent =
+      conv.type === "DM"
+        ? `@ ${
+            other?.username ||
+            other?.phone ||
+            other?.id?.slice(0, 6) ||
+            convId.slice(0, 6)
+          }`
+        : `# ${conv.name || "Groupe"}`;
+
     li.appendChild(nameEl);
 
     if (conv.lastMessagePreview) {
@@ -193,46 +340,61 @@ async function loadConversations() {
       li.appendChild(preview);
     }
 
-    li.addEventListener("click", () => selectConversation(conv.id));
+    li.addEventListener("click", () => selectConversation(convId));
     list.appendChild(li);
   }
 }
 
-// ── Sélection d'une conversation ──────────────────────────────────────────────
+// ── Sélection conversation ───────────────────────────────────────────────────
 async function selectConversation(convId) {
   activeConversationId = convId;
+  renderedMessageIds.clear();
+
   await loadChannels();
   await loadConversations();
+
   updateChatHeader(convId);
   showElement("chat-input-bar");
 
-  // Rejoindre le room socket si pas déjà fait
   if (socket && !joinedConvs.has(convId)) {
     socket.emit("conversation:join", { conversationId: convId });
     joinedConvs.add(convId);
   }
 
-  // Charger l'historique initial
   const list = document.getElementById("messages-list");
   list.innerHTML = "";
 
-  const { body } = await apiCall("GET", `/conversations/${convId}/messages?limit=50`);
-  const msgs = body.messages || [];
+  const { status, body } = await apiCall(
+    "GET",
+    `/conversations/${convId}/messages?limit=50`
+  );
 
-  // L'API renvoie newest→oldest ; on inverse pour afficher oldest en haut
-  msgs.reverse().forEach(m => renderMessage(m, false));
+  if (status !== 200) {
+    console.error("load messages failed", status, body);
+    alert("Erreur lors du chargement des messages.");
+    return;
+  }
+
+  const msgs = body.messages || [];
+  msgs.reverse().forEach((m) => renderMessage(m, false));
+
   scrollToBottom();
 
   hasMoreByConv.set(convId, body.hasMore || false);
+
   if (body.hasMore && body.nextCursor) {
     oldestByConv.set(convId, body.nextCursor);
+  } else {
+    oldestByConv.delete(convId);
   }
 }
 
 function updateChatHeader(convId) {
   const header = document.getElementById("chat-header");
   header.innerHTML = "";
+
   const p = document.createElement("p");
+
   if (!convId) {
     p.className = "text-gray-400";
     p.textContent = "Sélectionne une conversation";
@@ -240,60 +402,87 @@ function updateChatHeader(convId) {
     p.className = "font-semibold";
     p.textContent = `Conversation ${convId.slice(0, 8)}`;
   }
+
   header.appendChild(p);
 }
 
-// ── Rendu d'un message ────────────────────────────────────────────────────────
-function renderMessage(msg, prepend) {
+// ── Messages ─────────────────────────────────────────────────────────────────
+function renderMessage(msg, prepend = false) {
+  if (msg.id && renderedMessageIds.has(msg.id)) return;
+  if (msg.id) renderedMessageIds.add(msg.id);
+
   const list = document.getElementById("messages-list");
 
-  // Supporte format API (sender.id) et format socket (senderId)
-  const senderId   = msg.sender ? msg.sender.id : msg.senderId;
-  const senderName = msg.sender ? msg.sender.username : (senderId?.slice(0, 8) ?? "?");
-  const isMe       = senderId === currentUser?.id;
-  const isBlocked  = msg.status === "BLOCKED";
+  const senderId = msg.sender?.id || msg.senderId;
+  const senderName =
+    msg.sender?.username ||
+    msg.sender?.phone ||
+    senderId?.slice(0, 8) ||
+    "?";
+
+  const isMe = senderId === currentUser?.id;
+  const isBlocked = msg.status === "BLOCKED";
 
   const wrapper = document.createElement("div");
-  wrapper.className = `group flex items-end gap-2 ${isMe ? "justify-end" : "justify-start"}`;
+  wrapper.className = `group flex items-end gap-2 ${
+    isMe ? "justify-end" : "justify-start"
+  }`;
 
   const bubble = document.createElement("div");
   bubble.className = [
     "px-3 py-2 rounded-lg max-w-md break-words",
     isMe ? "bg-blue-500 text-white" : "bg-white border",
     isBlocked ? "italic opacity-50" : "",
-  ].filter(Boolean).join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   const content = document.createElement("p");
-  content.textContent = isBlocked ? "🚫 Message bloqué par la modération" : msg.content;
+  content.textContent = isBlocked
+    ? "🚫 Message bloqué par la modération"
+    : msg.content;
+
   bubble.appendChild(content);
 
+  const createdAt = msg.createdAt
+    ? new Date(msg.createdAt).toLocaleTimeString()
+    : "now";
+
   const meta = document.createElement("p");
-  meta.className = `text-[10px] mt-1 ${isMe ? "text-blue-200" : "text-gray-400"}`;
-  meta.textContent = `${senderName} · ${new Date(msg.createdAt).toLocaleTimeString()}`;
+  meta.className = `text-[10px] mt-1 ${
+    isMe ? "text-blue-200" : "text-gray-400"
+  }`;
+  meta.textContent = `${senderName} · ${createdAt}`;
+
   bubble.appendChild(meta);
 
-  // Boutons d'action (visibles au hover)
   const actions = document.createElement("div");
-  actions.className = "flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity";
+  actions.className =
+    "flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity";
 
-  if (!isMe && !isBlocked) {
+  const messageId = msg.id || msg._id;
+
+  if (!isMe && !isBlocked && messageId) {
     const reportBtn = document.createElement("button");
-    reportBtn.className = "text-xs text-orange-500 hover:text-orange-700 whitespace-nowrap";
+    reportBtn.className =
+      "text-xs text-orange-500 hover:text-orange-700 whitespace-nowrap";
     reportBtn.textContent = "Signaler";
-    reportBtn.addEventListener("click", () => reportMessage(msg.id));
+    reportBtn.addEventListener("click", () => reportMessage(messageId));
     actions.appendChild(reportBtn);
   }
 
-  const isMod = currentUser?.role === "MODERATOR" || currentUser?.role === "ADMIN";
-  if (isMod && !isBlocked) {
+  const isMod =
+    currentUser?.role === "MODERATOR" || currentUser?.role === "ADMIN";
+
+  if (isMod && !isBlocked && messageId) {
     const blockBtn = document.createElement("button");
-    blockBtn.className = "text-xs text-red-500 hover:text-red-700 whitespace-nowrap";
+    blockBtn.className =
+      "text-xs text-red-500 hover:text-red-700 whitespace-nowrap";
     blockBtn.textContent = "Bloquer";
-    blockBtn.addEventListener("click", () => blockMessage(msg.id));
+    blockBtn.addEventListener("click", () => blockMessage(messageId));
     actions.appendChild(blockBtn);
   }
 
-  // Actions à gauche de la bulle pour les messages de l'utilisateur courant
   if (isMe) {
     wrapper.appendChild(actions);
     wrapper.appendChild(bubble);
@@ -314,10 +503,11 @@ function scrollToBottom() {
   list.scrollTop = list.scrollHeight;
 }
 
-// ── Pagination scroll-up ──────────────────────────────────────────────────────
+// ── Pagination ───────────────────────────────────────────────────────────────
 document.getElementById("messages-list").addEventListener("scroll", async () => {
   const list = document.getElementById("messages-list");
-  if (list.scrollTop !== 0) return;
+
+  if (list.scrollTop > 10) return;
   if (!activeConversationId) return;
   if (!hasMoreByConv.get(activeConversationId)) return;
   if (isLoadingMore) return;
@@ -326,49 +516,79 @@ document.getElementById("messages-list").addEventListener("scroll", async () => 
   if (!cursor) return;
 
   isLoadingMore = true;
+
   try {
-    const { body } = await apiCall(
+    const { status, body } = await apiCall(
       "GET",
       `/conversations/${activeConversationId}/messages?limit=50&before=${cursor}`
     );
+
+    if (status !== 200) {
+      console.error("load more messages failed", status, body);
+      return;
+    }
+
     const msgs = body.messages || [];
     const oldHeight = list.scrollHeight;
-    msgs.reverse().forEach(m => renderMessage(m, true));
-    // Repositionner pour que la vue ne "saute" pas
+
+    msgs.reverse().forEach((m) => renderMessage(m, true));
+
     list.scrollTop = list.scrollHeight - oldHeight;
 
     hasMoreByConv.set(activeConversationId, body.hasMore || false);
+
     if (body.hasMore && body.nextCursor) {
       oldestByConv.set(activeConversationId, body.nextCursor);
+    } else {
+      oldestByConv.delete(activeConversationId);
     }
   } finally {
     isLoadingMore = false;
   }
 });
 
-// ── Envoi de message ──────────────────────────────────────────────────────────
+// ── Envoi message ────────────────────────────────────────────────────────────
 document.getElementById("send-form").addEventListener("submit", (e) => {
   e.preventDefault();
+
   const input = document.getElementById("message-input");
-  const text  = input.value.trim();
+  const button = e.target.querySelector("button");
+  const text = input.value.trim();
+
   if (!text || !activeConversationId || !socket) return;
+
+  button.disabled = true;
+
   socket.emit("message:send", {
-    conversationId:  activeConversationId,
-    content:         text,
+    conversationId: activeConversationId,
+    content: text,
     clientMessageId: `cli-${Date.now()}`,
   });
+
   input.value = "";
+
+  setTimeout(() => {
+    button.disabled = false;
+  }, 300);
 });
 
-// ── Modération : signaler / bloquer ──────────────────────────────────────────
+// ── Reports / Modération ─────────────────────────────────────────────────────
 async function reportMessage(messageId) {
   const reason = prompt("Pourquoi signales-tu ce message ?");
+
   if (!reason || reason.trim().length < 3) return;
-  const { status, body } = await apiCall("POST", "/reports", { messageId, reason: reason.trim() });
+
+  const { status, body } = await apiCall("POST", "/reports", {
+    messageId,
+    reason: reason.trim(),
+  });
+
   if (status === 201) {
     alert("Message signalé. Merci.");
   } else if (status === 409) {
     alert("Tu as déjà signalé ce message.");
+  } else if (status === 400) {
+    alert("Signalement invalide.");
   } else {
     console.error("reportMessage failed", status, body);
     alert("Erreur lors du signalement.");
@@ -377,19 +597,31 @@ async function reportMessage(messageId) {
 
 async function blockMessage(messageId) {
   if (!confirm("Bloquer ce message ?")) return;
+
   const { status, body } = await apiCall("PATCH", `/messages/${messageId}/block`);
+
   if (status === 200) {
-    if (activeConversationId) await selectConversation(activeConversationId);
+    if (activeConversationId) {
+      await selectConversation(activeConversationId);
+    }
   } else {
     console.error("blockMessage failed", status, body);
     alert("Erreur lors du blocage.");
   }
 }
 
-// ── Modal reports (MOD/ADMIN) ─────────────────────────────────────────────────
+// ── Modal reports ────────────────────────────────────────────────────────────
 async function openReportsModal() {
-  const { status, body } = await apiCall("GET", "/moderation/reports?status=OPEN");
-  if (status !== 200) { console.error("openReportsModal failed", status); return; }
+  const { status, body } = await apiCall(
+    "GET",
+    "/moderation/reports?status=OPEN"
+  );
+
+  if (status !== 200) {
+    console.error("openReportsModal failed", status, body);
+    alert("Impossible de charger les signalements.");
+    return;
+  }
 
   const reportsList = document.getElementById("reports-list");
   reportsList.innerHTML = "";
@@ -400,19 +632,22 @@ async function openReportsModal() {
     empty.textContent = "Aucun signalement ouvert.";
     reportsList.appendChild(empty);
   } else {
-    for (const report of body.reports) {
+    for (const report of body.reports || []) {
       const li = document.createElement("li");
       li.className = "border-b pb-3";
 
       const header = document.createElement("p");
       header.className = "text-sm";
-      const r = document.createElement("strong");
-      r.textContent = report.reporter?.username ?? "?";
-      const s = document.createElement("strong");
-      s.textContent = report.message?.sender?.username ?? "?";
-      header.appendChild(r);
+
+      const reporter = document.createElement("strong");
+      reporter.textContent = report.reporter?.username || "?";
+
+      const sender = document.createElement("strong");
+      sender.textContent = report.message?.sender?.username || "?";
+
+      header.appendChild(reporter);
       header.append(" a signalé ");
-      header.appendChild(s);
+      header.appendChild(sender);
 
       const reason = document.createElement("p");
       reason.className = "text-xs text-gray-500 mt-1";
@@ -420,11 +655,12 @@ async function openReportsModal() {
 
       const msgContent = document.createElement("p");
       msgContent.className = "bg-gray-100 p-2 rounded text-sm mt-1";
-      msgContent.textContent = `"${report.message?.content ?? "—"}"`;
+      msgContent.textContent = `"${report.message?.content || "—"}"`;
 
       const blockBtn = document.createElement("button");
       blockBtn.className = "mt-2 bg-red-600 text-white px-3 py-1 rounded text-xs";
       blockBtn.textContent = "Bloquer le message";
+
       blockBtn.addEventListener("click", async () => {
         await blockMessage(report.message.id);
         hideElement("reports-modal");
@@ -435,6 +671,7 @@ async function openReportsModal() {
       li.appendChild(reason);
       li.appendChild(msgContent);
       li.appendChild(blockBtn);
+
       reportsList.appendChild(li);
     }
   }
@@ -443,61 +680,103 @@ async function openReportsModal() {
 }
 
 document.getElementById("reports-btn").addEventListener("click", openReportsModal);
-document.getElementById("close-reports-btn").addEventListener("click", () => hideElement("reports-modal"));
 
-// ── Nouveau DM ────────────────────────────────────────────────────────────────
+document
+  .getElementById("close-reports-btn")
+  .addEventListener("click", () => hideElement("reports-modal"));
+
+// ── Nouveau DM ───────────────────────────────────────────────────────────────
 document.getElementById("new-dm-btn").addEventListener("click", async () => {
   const otherUserId = prompt("ID de l'utilisateur ?");
+
   if (!otherUserId || !otherUserId.trim()) return;
-  const { status } = await apiCall("POST", "/conversations/dm", { otherUserId: otherUserId.trim() });
-  if (status !== 200 && status !== 201) {
-    alert("Erreur lors de la création du DM (ID invalide ?)");
+
+  const { status, body } = await apiCall("POST", "/conversations/dm", {
+    otherUserId: otherUserId.trim(),
+  });
+
+  if (![200, 201].includes(status)) {
+    console.error("create DM failed", status, body);
+    alert("Erreur lors de la création du DM.");
     return;
   }
+
   await loadConversations();
+
+  const convId =
+    body.conversation?.id ||
+    body.conversation?._id ||
+    body.id ||
+    body._id;
+
+  if (convId) {
+    await selectConversation(convId);
+  }
 });
 
-// ── Formulaire téléphone ──────────────────────────────────────────────────────
+// ── Login téléphone ──────────────────────────────────────────────────────────
 document.getElementById("phone-form").addEventListener("submit", async (e) => {
   e.preventDefault();
+
   const phone = document.getElementById("phone-input").value.trim();
-  const { status } = await apiCall("POST", "/auth/request-otp", { phone }, false);
+
+  const { status, body } = await apiCall(
+    "POST",
+    "/auth/request-otp",
+    { phone },
+    false
+  );
+
   if (status === 200) {
     currentPhone = phone;
     hideElement("phone-form");
     showElement("otp-form");
     hideElement("login-error");
   } else {
+    console.error("request otp failed", status, body);
     showError("Numéro invalide");
   }
 });
 
-// ── Formulaire OTP ────────────────────────────────────────────────────────────
+// ── Login OTP ────────────────────────────────────────────────────────────────
 document.getElementById("otp-form").addEventListener("submit", async (e) => {
   e.preventDefault();
+
   const otp = document.getElementById("otp-input").value.trim();
+
   const { status, body } = await apiCall(
-    "POST", "/auth/verify-otp",
+    "POST",
+    "/auth/verify-otp",
     { phone: currentPhone, otp },
     false
   );
+
   if (status === 200) {
     setToken(body.token);
     await enterApp(body.user);
   } else if (status === 401) {
     showError("Code incorrect (essaie 123456)");
   } else {
+    console.error("verify otp failed", status, body);
     showError("Erreur, réessaie");
   }
 });
 
-// ── Déconnexion ───────────────────────────────────────────────────────────────
+// ── Logout ──────────────────────────────────────────────────────────────────
 document.getElementById("logout-btn").addEventListener("click", () => {
   if (socket) socket.disconnect();
+
   clearToken();
   currentUser = null;
+  activeConversationId = null;
+  joinedConvs.clear();
+  oldestByConv.clear();
+  hasMoreByConv.clear();
+  renderedMessageIds.clear();
+
   location.reload();
 });
 
-// ── Point d'entrée ────────────────────────────────────────────────────────────
+// ── Point d'entrée ───────────────────────────────────────────────────────────
+initHomeButtons();
 bootstrap();
