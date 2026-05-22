@@ -211,48 +211,82 @@
   <!-- APP PRINCIPALE -->
   <section id="app-section" class="hidden">
     <div class="flex h-screen">
-      <aside class="w-72 bg-white border-r overflow-y-auto">
-        <div class="p-4 border-b flex items-center justify-between">
-          <div>
-            <p class="font-semibold" id="user-username">—</p>
-            <p class="text-xs text-gray-500" id="user-role">—</p>
-            <p class="text-[10px] text-gray-400 font-mono" id="user-id"></p>
-          </div>
-          <div class="flex flex-col gap-1 items-end">
-            <button id="logout-btn" class="text-sm text-red-600">Déconnexion</button>
-            <button id="reports-btn" class="hidden text-xs bg-red-100 text-red-700 px-2 py-1 rounded">
-              🛡 Reports
-            </button>
+
+      <!-- SIDEBAR SOMBRE -->
+      <aside class="w-64 bg-slate-950 text-white flex flex-col flex-shrink-0">
+
+        <!-- Logo -->
+        <div class="h-16 px-5 flex items-center gap-3 border-b border-slate-800">
+          <div class="w-8 h-8 rounded-lg bg-violet-600 flex items-center justify-center text-base flex-shrink-0">💬</div>
+          <span class="font-bold text-lg tracking-tight">SafeChat</span>
+        </div>
+
+        <!-- Utilisateur -->
+        <div class="px-4 py-3 border-b border-slate-800">
+          <div class="flex items-center justify-between gap-2">
+            <div class="min-w-0">
+              <p class="font-semibold text-sm truncate" id="user-username">—</p>
+              <p class="text-xs text-violet-400 truncate" id="user-role">—</p>
+              <p class="text-[9px] text-slate-500 font-mono truncate" id="user-id"></p>
+            </div>
+            <div class="flex flex-col items-end gap-1 flex-shrink-0">
+              <button id="logout-btn" class="text-xs text-slate-400 hover:text-red-400 transition-colors">Quitter</button>
+              <button id="reports-btn" class="hidden text-xs bg-violet-900 text-violet-300 hover:bg-violet-800 px-2 py-0.5 rounded-full transition-colors">
+                🛡 Reports
+              </button>
+            </div>
           </div>
         </div>
 
-        <div class="p-3">
-          <h2 class="text-xs uppercase text-gray-500 font-bold mb-2">Channels</h2>
-          <ul id="channels-list" class="space-y-1"></ul>
+        <!-- Navigation -->
+        <div class="flex-1 overflow-y-auto px-3 py-4 space-y-6">
 
-          <div class="flex items-center justify-between mt-4 mb-2">
-            <h2 class="text-xs uppercase text-gray-500 font-bold">Conversations</h2>
-            <button id="new-dm-btn" class="text-xs text-blue-600 hover:text-blue-800 font-bold">+ DM</button>
+          <div>
+            <p class="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2 px-2">Channels</p>
+            <ul id="channels-list" class="space-y-0.5"></ul>
           </div>
 
-          <ul id="conversations-list" class="space-y-1"></ul>
+          <div>
+            <div class="flex items-center justify-between mb-2 px-2">
+              <p class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Conversations</p>
+              <button id="new-dm-btn" class="text-xs text-violet-400 hover:text-violet-300 font-bold transition-colors">+ DM</button>
+            </div>
+            <ul id="conversations-list" class="space-y-0.5"></ul>
+          </div>
+
         </div>
       </aside>
 
-      <main class="flex-1 flex flex-col">
-        <header id="chat-header" class="p-4 border-b bg-white">
-          <p class="text-gray-400">Sélectionne une conversation</p>
+      <!-- ZONE PRINCIPALE -->
+      <main class="flex-1 flex flex-col bg-gray-50 min-w-0 relative">
+
+        <!-- En-tête conversation -->
+        <header id="chat-header" class="h-16 px-6 border-b bg-white flex items-center shadow-sm flex-shrink-0">
+          <p class="text-gray-400 text-sm">Sélectionne une conversation</p>
         </header>
 
-        <div id="messages-list" class="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50"></div>
+        <!-- État vide -->
+        <div id="empty-state" class="absolute inset-x-0 flex flex-col items-center justify-center text-center pointer-events-none" style="top:64px;bottom:0;">
+          <div class="w-16 h-16 rounded-2xl bg-violet-100 flex items-center justify-center text-3xl mb-4">💬</div>
+          <p class="font-semibold text-gray-700 mb-1">Bienvenue sur SafeChat</p>
+          <p class="text-gray-400 text-sm max-w-xs">Sélectionne un channel ou démarre une conversation privée</p>
+        </div>
 
-        <footer id="chat-input-bar" class="p-3 border-t bg-white hidden">
-          <form id="send-form" class="flex gap-2">
-            <input id="message-input" class="flex-1 border rounded p-2"
+        <!-- Messages -->
+        <div id="messages-list" class="flex-1 overflow-y-auto px-6 py-4 space-y-3 bg-gray-50"></div>
+
+        <!-- Saisie message -->
+        <footer id="chat-input-bar" class="px-6 py-4 border-t bg-white hidden flex-shrink-0">
+          <form id="send-form" class="flex gap-3 items-center">
+            <input id="message-input"
+                   class="flex-1 bg-gray-100 border-0 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 transition"
                    placeholder="Écrire un message..." required>
-            <button class="bg-blue-600 text-white px-4 rounded">Envoyer</button>
+            <button class="bg-violet-600 hover:bg-violet-700 text-white px-5 py-3 rounded-xl text-sm font-medium transition-colors flex-shrink-0">
+              Envoyer
+            </button>
           </form>
         </footer>
+
       </main>
     </div>
   </section>

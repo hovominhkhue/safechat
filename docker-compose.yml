@@ -13,6 +13,8 @@ services:
       - JWT_SECRET=${JWT_SECRET:-safechat_dev_secret_changeme}
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
       - OTP_FAKE_CODE=${OTP_FAKE_CODE:-123456}
+    volumes:
+      - ./frontend:/app/frontend
     depends_on:
       - mongodb
 

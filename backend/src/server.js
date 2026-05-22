@@ -7,6 +7,7 @@ const cors = require("cors");
 const { Server } = require("socket.io");
 
 const connectDB = require("./config/db");
+const seedChannels = require("./scripts/seedChannels");
 const setupSockets = require("./sockets");
 
 const app = express();
@@ -59,7 +60,7 @@ setupSockets(io);
 // Start
 const PORT = process.env.PORT || 3001;
 
-connectDB();
+connectDB().then(() => seedChannels().catch(console.error));
 
 server.listen(PORT, () => {
   console.log(`✅ Server running on http://localhost:${PORT}`);

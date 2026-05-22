@@ -12,6 +12,7 @@ const joinedConvs = new Set();
 const oldestByConv = new Map();
 const hasMoreByConv = new Map();
 const renderedMessageIds = new Set();
+const conversationNames = new Map();
 
 // ── Token ────────────────────────────────────────────────────────────────────
 function getToken() {
@@ -211,9 +212,12 @@ async function loadChannels() {
 
     const li = document.createElement("li");
     li.className = [
-      "flex items-center justify-between px-2 py-1 rounded text-sm",
-      ch.isJoined ? "bg-blue-100" : "bg-gray-50 hover:bg-gray-100",
-      isActive ? "ring-2 ring-blue-500" : "",
+      "flex items-center justify-between px-3 py-1.5 rounded-lg text-sm cursor-pointer transition-colors",
+      isActive
+        ? "bg-violet-600 text-white"
+        : ch.isJoined
+        ? "text-slate-200 hover:bg-slate-800"
+        : "text-slate-500 hover:bg-slate-900",
     ]
       .filter(Boolean)
       .join(" ");
@@ -223,15 +227,18 @@ async function loadChannels() {
     label.textContent = `# ${ch.topic || ch.name}`;
 
     if (ch.isJoined && ch.conversationId) {
+      conversationNames.set(ch.conversationId, `# ${ch.topic || ch.name}`);
       label.classList.add("cursor-pointer");
       label.addEventListener("click", () => selectConversation(ch.conversationId));
     }
 
     const btn = document.createElement("button");
-    btn.className = `ml-2 text-xs font-bold px-1.5 rounded ${
+    btn.className = `ml-2 text-xs font-bold px-1.5 py-0.5 rounded transition-colors ${
       ch.isJoined
-        ? "text-blue-600 hover:text-red-500"
-        : "text-green-600 hover:text-green-800"
+        ? isActive
+          ? "text-violet-200 hover:text-red-300"
+          : "text-slate-400 hover:text-red-400"
+        : "text-violet-400 hover:text-violet-300"
     }`;
     btn.textContent = ch.isJoined ? "×" : "+";
 
@@ -307,21 +314,20 @@ async function loadConversations() {
 
     const li = document.createElement("li");
     li.className = [
-      "px-2 py-1 rounded cursor-pointer text-sm",
-      "bg-gray-50 hover:bg-gray-100",
-      isActive ? "ring-2 ring-blue-500" : "",
+      "px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors",
+      isActive ? "bg-violet-600 text-white" : "text-slate-300 hover:bg-slate-800",
     ]
       .filter(Boolean)
       .join(" ");
 
     const nameEl = document.createElement("p");
-    nameEl.className = "font-medium";
+    nameEl.className = `font-medium ${isActive ? "text-white" : ""}`;
 
     const other = conv.participants?.find(
       (p) => (p.id || p._id) !== currentUser?.id
     );
 
-    nameEl.textContent =
+    const displayName =
       conv.type === "DM"
         ? `@ ${
             other?.username ||
@@ -331,11 +337,14 @@ async function loadConversations() {
           }`
         : `# ${conv.name || "Groupe"}`;
 
+    nameEl.textContent = displayName;
+    conversationNames.set(convId, displayName);
+
     li.appendChild(nameEl);
 
     if (conv.lastMessagePreview) {
       const preview = document.createElement("p");
-      preview.className = "text-xs text-gray-400 truncate";
+      preview.className = `text-xs truncate mt-0.5 ${isActive ? "text-violet-200" : "text-slate-500"}`;
       preview.textContent = conv.lastMessagePreview;
       li.appendChild(preview);
     }
@@ -393,17 +402,42 @@ function updateChatHeader(convId) {
   const header = document.getElementById("chat-header");
   header.innerHTML = "";
 
-  const p = document.createElement("p");
-
   if (!convId) {
-    p.className = "text-gray-400";
+    const p = document.createElement("p");
+    p.className = "text-gray-400 text-sm";
     p.textContent = "Sélectionne une conversation";
-  } else {
-    p.className = "font-semibold";
-    p.textContent = `Conversation ${convId.slice(0, 8)}`;
+    header.appendChild(p);
+    showElement("empty-state");
+    return;
   }
 
-  header.appendChild(p);
+  hideElement("empty-state");
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "flex items-center gap-3";
+
+  const displayName = conversationNames.get(convId) || `Conversation ${convId.slice(0, 8)}`;
+  const iconChar = displayName.startsWith("@") ? "@" : "#";
+
+  const icon = document.createElement("div");
+  icon.className = "w-9 h-9 rounded-xl bg-violet-100 flex items-center justify-center text-violet-600 font-bold text-sm flex-shrink-0";
+  icon.textContent = iconChar;
+
+  const info = document.createElement("div");
+
+  const name = document.createElement("p");
+  name.className = "font-semibold text-gray-900";
+  name.textContent = displayName;
+
+  const idEl = document.createElement("p");
+  idEl.className = "text-xs text-gray-400 font-mono";
+  idEl.textContent = convId.slice(0, 8);
+
+  info.appendChild(name);
+  info.appendChild(idEl);
+  wrapper.appendChild(icon);
+  wrapper.appendChild(info);
+  header.appendChild(wrapper);
 }
 
 // ── Messages ─────────────────────────────────────────────────────────────────
@@ -430,8 +464,8 @@ function renderMessage(msg, prepend = false) {
 
   const bubble = document.createElement("div");
   bubble.className = [
-    "px-3 py-2 rounded-lg max-w-md break-words",
-    isMe ? "bg-blue-500 text-white" : "bg-white border",
+    "px-4 py-2.5 rounded-2xl max-w-md break-words text-sm",
+    isMe ? "bg-violet-600 text-white rounded-br-sm" : "bg-white border border-gray-200 shadow-sm rounded-bl-sm",
     isBlocked ? "italic opacity-50" : "",
   ]
     .filter(Boolean)
@@ -450,7 +484,7 @@ function renderMessage(msg, prepend = false) {
 
   const meta = document.createElement("p");
   meta.className = `text-[10px] mt-1 ${
-    isMe ? "text-blue-200" : "text-gray-400"
+    isMe ? "text-violet-200" : "text-gray-400"
   }`;
   meta.textContent = `${senderName} · ${createdAt}`;
 
